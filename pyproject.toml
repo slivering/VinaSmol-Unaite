@@ -1,0 +1,35 @@
+[project]
+name = "vinasmol"
+version = "0.1.0"
+description = "Vietnamese brought to SmolLM 360M"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "accelerate",
+    "datasets",
+    "datatrove[io,processing,cli]",
+    "ftfy",
+    "gguf",
+    #"goodwiki", # TODO: fork this repo because it's outdated
+    "jsonlines",
+    "matplotlib",
+    "pandas",
+    "pypandoc",
+    "pyvi",
+    "rensa",
+    "seaborn",
+    "spacy[cuda12x]>=3.8",
+    "torch",
+    "transformers",
+]
+
+[dependency-groups]
+dev = [
+    "ipykernel",
+    "ipywidgets",
+    "jupyter",
+    "jupyterlab",
+    "licensecheck",
+    "notebook",
+    "ruff",
+]
