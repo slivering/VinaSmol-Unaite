@@ -20,6 +20,18 @@ The [SmolLM Corpus](https://huggingface.co/datasets/HuggingFaceTB/smollm-corpus)
 - [phongmt184172/mtet](https://huggingface.co/phongmt184172/mtet): Parallel Vietnamese/English pairs.
 - [doanhieung/vbpl](https://huggingface.co/doanhieung/vbpl): Vietnam’s official law texts.
 
+#### In-house datasets
+
+We compile a new dataset by downloading academic papers from [VJOL](https://vjol.info.vn) and processing them with [science-parse](https://github.com/allenai/science-parse).
+
+We will release the VJOL dataset soon. In order to reproduce it, start [ucrel-science-parse](https://hub.docker.com/r/ucrel/ucrel-science-parse) Docker server:
+
+```bash
+docker run -p 127.0.0.1:8080:8080 --rm --init --memory=6g --memory-swap=6g --env JAVA_MEMORY=5 ucrel/ucrel-science-parse:3.0.1
+```
+
+The Python file [vjol.py](./vjol.py) will download the necessary files and include the newly created dataset in SmolLM Vietnamese training data.
+
 ### Training budget
 
 We plan to continue the pretraining of SmolLM2 on around 2B training tokens, as for [EEVE-Korean](https://arxiv.org/abs/2402.14714). Even if EEVE-Korean has 10B parameters, its base model ([SOLAR 10.7B](https://arxiv.org/abs/2312.15166)) was likely pretrained on a little Korean before, so both factors might compensate.

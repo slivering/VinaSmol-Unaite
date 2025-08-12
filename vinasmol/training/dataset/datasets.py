@@ -1,10 +1,12 @@
-from datasets import enable_progress_bars, load_dataset
 from pathlib import Path
+
+from datasets import enable_progress_bars, load_dataset
 
 from ...hfmodel import BASE_MODEL, SMOLLM2, LUCIE
 from .preprocessing import (
     _set_text_as_md_in_vbpl, _set_text_as_md_in_wiki, NormalizeCols,
 )
+from . import vjol
 
 DATA_DIR = (Path(__file__).parent / "data").resolve()
 DATA_DIR_EN = DATA_DIR / "english"
@@ -199,6 +201,14 @@ def download_vietnamese_datasets(data_dir: Path):
         .map(NormalizeCols.vbpl)
         .shuffle(seed=SEED, buffer_size=10_000)
         .to_parquet(data_dir / "vbpl.parquet")
+    )
+
+    # Vietnam Journals OnLine (VJOL) - open-access research articles in Vietnamese
+    vjol_ = vjol.create_and_load_vjol(base_url="https://vjol.info.vn/index.php")
+    (vjol_
+        .map(NormalizeCols.vjol)
+        .shuffle(seed=SEED, buffer_size=1_000)
+        .to_parquet(data_dir / "vjol.parquet")
     )
 
 

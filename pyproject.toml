@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "accelerate",
+    "aiohttp",
     "datasets",
     "datatrove[io,processing,cli]",
     "ftfy",
@@ -18,8 +19,10 @@ dependencies = [
     "python-dotenv",
     "pyvi",
     "rensa",
+    "requests",
     "seaborn",
     "spacy[cuda12x]>=3.8",
+    "sickle",
     "torch",
     "transformers",
 ]
