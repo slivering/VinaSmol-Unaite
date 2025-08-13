@@ -1,6 +1,46 @@
 # Training data
 
-## Datasets
+This folder contains code for downloading and processing pretraining datasets for VinaSmol.
+
+## Build the pretraining dataset
+
+First, activate a virtual environment shell and log in to HuggingFace:
+
+```bash
+uv run bash
+hf auth login
+```
+Your HuggingFace account needs to accept agreements for the following datasets:
+- [CulturaX](https://huggingface.co/datasets/uonlp/CulturaX)
+- [MathPile Commercial](https://huggingface.co/datasets/GAIR/MathPile_Commercial)
+
+The next commands should be executed in the root folder of the repository.
+
+
+## Download data
+
+Download and preprocess the Vietnamese and English datasets by executing:
+
+```bash
+python -m vinasmol.training.dataset.datasets
+```
+
+Around 10 GB of data will be downloaded from HuggingFace. The preprocessed datasets will be stored in `./data`.
+
+
+
+## Filter and deduplicate data
+
+Filtering, redaction and deduplication can be run with the following command:
+
+```bash
+uv run python -m vinasmol.training.dataset.filtering
+```
+
+For now, filtering is only implemented for the Vietnamese datasets. The final results are dumped into `./data/vi-all/deduped`. Information about removal will be written into `./data/vi-all/removed`.
+
+
+## Recipe
 
 ### English and code datasets
 
@@ -15,7 +55,7 @@ The [SmolLM Corpus](https://huggingface.co/datasets/HuggingFaceTB/smollm-corpus)
 - [Wikipedia](https://huggingface.co/datasets/omarkamali/wikipedia-monthly) (Vietnamese)
 - [epfml/FineWeb2-HQ](https://huggingface.co/datasets/epfml/FineWeb2-HQ): General, high-quality web dataset.
 - [CulturaX](https://huggingface.co/datasets/uonlp/CulturaX): General web dataset.
-- [MADLAD-400](https://huggingface.co/datasets/allenai/MADLAD-400): General web dataset.
+- [madlad-400_vi](https://huggingface.co/datasets/Symato/madlad-400_vi): General web dataset. Clean Vietnamese subset of [MADLAD-400](https://huggingface.co/datasets/allenai/MADLAD-400)
 - [BKAI News Corpus](bkai-foundation-models/BKAINewsCorpus): large news dataset.
 - [phongmt184172/mtet](https://huggingface.co/phongmt184172/mtet): Parallel Vietnamese/English pairs.
 - [doanhieung/vbpl](https://huggingface.co/doanhieung/vbpl): Vietnam’s official law texts.
@@ -37,16 +77,17 @@ We plan to continue the pretraining of SmolLM2 on around 2B training tokens, as 
 
 ## Data preparation
 
-We follow the procedure as outlined in [Sailor](https://arxiv.org/abs/2404.03608), using [datatrove](https://github.com/huggingface/datatrove). We also take inspiration from [Sailcraft](https://github.com/sail-sg/sailcraft) for Vietnamese-specific filters.
+Our data preparation pipeline uses [datatrove](https://github.com/huggingface/datatrove). We take inspiration from [Sailcraft](https://github.com/sail-sg/sailcraft) for Vietnamese-specific filters.
 
 ### Formatting
 
-1. Check if existing Vietnamese Wikipedia datasets are correctly formatted, ideally in Markdown, with no missing information.
-2. If necessary, we can fork [GoodWiki](https://github.com/euirim/goodwiki) to adapt it for Vietnamese.
+The Vietnamese Wikipedia is not properly formatted and there are lots of sections to be removed. We can fork [wikiplaintext](https://github.com/OpenLLM-France/wikiplaintext) to adapt it for Vietnamese, process the Vietnamese Wikipedia separately, save it locally and use it instead. This separation can help with licensing.
+
+In the meantime, [VietGPT's processed Wikipedia](https://huggingface.co/vietgpt/wikipedia_vi) is a good resource for prototyping as it is significantly cleaner than other sources.
 
 ### Normalization
 
-Unicode normalization.
+We normalize Unicode punctuation and fix text encoding using [ftfy](https://ftfy.readthedocs.io/en/latest/).
 
 ### Deduplication
 
@@ -116,7 +157,18 @@ Using a Vietnamese-to-English dictionary for translation, code-switching as desc
 
 ## Citations
 
-- [MathPile: A Billion-Token-Scale Pretraining Corpus for Math](https://openreview.net/forum?id=RSvhU69sbG)
+TODO: grow the list to all of the pretraining datasets
+
+- [The Lucie-7B LLM and the Lucie Training Dataset: Open resources for multilingual language generation.](https://arxiv.org/abs/2503.12294)
 - [CulturaX: A Cleaned, Enormous, and Multilingual Dataset for Large Language Models in 167 Languages](https://aclanthology.org/2024.lrec-main.377)
+- [MADLAD-400 (Multilingual Audited Dataset: Low-resource And Document-level)](https://arxiv.org/abs/2309.04662)
+- [Towards Comprehensive Vietnamese Retrieval-Augmented Generation and Large Language Models](https://arxiv.org/abs/2403.01616)
+- [MTet: Multi-domain Translation for English and Vietnamese](https://arxiv.org/abs/2210.05610)
+- [vbpl.vn - The National Database of Legal Documents, Ministry of Justice, Vietnam](https://vbpl.vn)
+- [Enhancing Multilingual LLM Pretraining with Model-Based Data Selection](https://arxiv.org/abs/2502.10361)
+- [SmolLM2: When Smol Goes Big -- Data-Centric Training of a Small Language Model](https://arxiv.org/abs/2502.02737v1)
+- [MathPile: A Billion-Token-Scale Pretraining Corpus for Math](https://openreview.net/forum?id=RSvhU69sbG)
 - [Sailor: Open Language Models for South-East Asia](https://arxiv.org/abs/2404.03608)
+- [Penedo et al. (2024). DataTrove: large scale data processing.](https://github.com/huggingface/datatrove)
+- [Robyn Speer. (2019). ftfy (Version 5.5). Zenodo.](http://doi.org/10.5281/zenodo.2591652)
 - [vietnamese-stopwords](https://github.com/stopwords/vietnamese-stopwords)

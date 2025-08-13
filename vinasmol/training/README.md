@@ -72,8 +72,3 @@ We follow the procedure outlined by [Gao et al.](https://arxiv.org/abs/2410.0266
 Using a larger base model such as [Lucie 7B](https://huggingface.co/OpenLLM-France/Lucie-7B-Instruct-v1.1) may improve the model capabilities and degree of multilinguality.
 
 Techniques such as [depth upscaling](https://planetbanatt.net/articles/modelmerging.html#orgf613f37) used by [SOLAR 10.7B](https://arxiv.org/abs/2312.15166) could be used to increase the size of the model and scale to a higher number of parameters. However it's unclear whether depth upscaling coud prove to be useful for very small models.
-
-## Citations
-
-- [Robyn Speer. (2019). ftfy (Version 5.5). Zenodo.](http://doi.org/10.5281/zenodo.2591652)
-- [Penedo et al. (2024). DataTrove: large scale data processing.](https://github.com/huggingface/datatrove)

@@ -10,7 +10,6 @@ dependencies = [
     "datatrove[io,processing,cli]",
     "ftfy",
     "gguf",
-    #"goodwiki", # TODO: fork this repo because it's outdated
     "jsonlines",
     "matplotlib",
     "pandas",

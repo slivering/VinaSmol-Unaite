@@ -1,10 +1,8 @@
-#import asyncio
 from datetime import datetime
 from enum import StrEnum
-#from goodwiki import GoodwikiClient
-import json
 import random
 import re
+from threading import Lock
 
 from datatrove.utils.text import Languages
 import pypandoc
@@ -13,7 +11,7 @@ from vinasmol.hfmodel import LUCIE, SMOLLM2
 def filter_keys(d: dict, keys: list[str]) -> dict:
     return {k: d[k] for k in keys}
 
-def format_en_wiki_to_md(title: str, mediawiki: str) -> str:
+def convert_en_wiki_to_md(title: str, mediawiki: str) -> str:
     """Format an English Wikipedia page to Markdown.
 
     Args:
@@ -22,19 +20,9 @@ def format_en_wiki_to_md(title: str, mediawiki: str) -> str:
     Returns:
         str: The formatted content as Github-Flavored Markdown.
     """
-    #client = GoodwikiClient()
-    # This function is not really async since we're directly processing the page content
-    # page = asyncio.run(client.get_page_from_wikitext(
-    #     mediawiki,
-    #     title,
-    #     pageid=0,
-    #     revid=0,
-    #     with_styling=False,
-    # ))
-    # return page.markdown
-    return mediawiki # FIXME: goodwiki is outdated
+    raise NotImplementedError
 
-def format_vi_wiki_to_md(title: str, mediawiki: str) -> str:
+def convert_vi_wiki_to_md(title: str, mediawiki: str) -> str:
     """Format a Vietnamese Wikipedia page to Markdown.
 
     Args:
@@ -43,11 +31,22 @@ def format_vi_wiki_to_md(title: str, mediawiki: str) -> str:
     Returns:
         str: The formatted content as Github-Flavored Markdown.
     """
-    # TODO: fork GoodWiki to add Vietnamese support
-    return format_en_wiki_to_md(title, mediawiki)
+    raise NotImplementedError
+
+def convert_mediawiki_to_md(row: dict, lang: str = 'en') -> dict:
+    """Replace `'text'` by converting the `'raw_mediawiki'` to Markdown."""
+    # TODO: process Wikipedia using wikiplaintext separately
+    # match lang:
+    #     case 'en':
+    #         fmt = convert_en_wiki_to_md
+    #     case 'vi':
+    #         fmt = convert_vi_wiki_to_md
+    # row['text'] = fmt(row['title'], row['raw_mediawiki'])
+    return row
+
 
 def parse_publication_date(publish: str) -> datetime:
-    """Parse the publication date of a Vietnamese new article.
+    """Parse the publication date of a Vietnamese news article.
 
     Args:
         publish (str): the value of the "publish" field in the BKAI News Corpus.
@@ -56,8 +55,8 @@ def parse_publication_date(publish: str) -> datetime:
     Returns:
         datetime: the parsed publication date.
     """
-    date = json.loads(publish)["$date"]
-    return datetime.strptime(date, "%Y-%m-%dT%H:%M:%S%z")
+    date = publish["$date"]
+    return datetime.strptime(date, "%Y-%m-%dT%H:%M:%S.000Z")
 
 _DISABLED_PANDOC_MD_EXTENSIONS = [
     'raw_html',
@@ -74,6 +73,18 @@ _MD_LINK_WITH_SQUARE_BRACKETS = re.compile(r"\[\\\[([^\[\]]+)\\\]\]\(([^)]+)\)")
 
 _ABSTRACT_RE = re.compile(r"^Abstract", flags=re.MULTILINE)
 _REFERENCES_RE = re.compile(r"^References|^\*\*References", flags=re.MULTILINE)
+
+def replace_md_links_with_text(
+        markdown_content: str,
+        pattern: re.Pattern = _MD_LINK,
+    ) -> str:
+    """Replace all Markdown links with their text content.
+    
+    Args:
+        markdown_content (str): the Markdown content.
+        pattern (re.Pattern): a regex pattern that captures the Markdown link text.
+    """
+    return pattern.sub(lambda m: m.groups()[0], markdown_content)    
 
 def format_olmocr_pes2o(text: str) -> str:
     """Format olmOCR-pes2o-0225 to Markdown and remove superflous content if possible.
@@ -100,35 +111,31 @@ def format_olmocr_pes2o(text: str) -> str:
     return title + "\n" + text[abstract_idx:references_idx]
 
 
+# pattern : \_\_\_\_\_ (possibly in bold)
+_VBPL_RULER_RE = re.compile(r"(?:\*)*(?:\\_)+(?:\*)*", flags=re.MULTILINE)
 
-def _set_text_as_md_in_wiki(row: dict, lang: str = 'en') -> dict:
-    # TODO:
-    # match lang:
-    #     case 'en':
-    #         fmt = format_en_wiki_to_md
-    #     case 'vi':
-    #         fmt = format_vi_wiki_to_md
-    # row['text'] = fmt(row['title'], row['raw_mediawiki'])
-    del row['raw_mediawiki']
-    return row
-
-def _set_text_as_md_in_vbpl(row: dict) -> dict:
-    # TODO: check that markdown content is faithfully formatted
-    row['text'] = row['markdown_content']
-    del row['html_content']
+def format_vbpl_md(row: dict) -> dict:
+    """Improve the Markdown formatting of a VBPL example."""
+    content = row['markdown_content']
+    content = _VBPL_RULER_RE.sub("", content)
+    content = replace_md_links_with_text(content)
+    content = content.replace("/.", "") # Weird espace character at the end of a text
+    content = content.replace("\xa0", " ") # was nbsp; in HTML
+    row['markdown_content'] = content
     return row
 
 
 class DatasetNames(StrEnum):
     _ignore_ = [
-        '_IDS', '_ID_COUNTERS', '_GLOBAL_ID_COUNTER',
-        'ENABLED', 'ENGLISH', 'VIETNAMESE', 'CODE',
+        '_IDS', '_ID_COUNTERS', '_GLOBAL_ID_COUNTER', '_LOCK',
+        '_ENABLED', 'ENGLISH', 'VIETNAMESE', 'CODE',
     ]
 
     # SmolLM corpus
     cosmopedia_v2 = "HuggingFaceTB/smollm-corpus:cosmopedia-v2"
     fineweb_edu_dedup = "HuggingFaceTB/smollm-corpus:fineweb-edu-dedup"
-    python_edu = "HuggingFaceTB/smollm-corpus:python-edu"
+
+    starcoder_python_edu = "JanSchTech/starcoderdata-python-edu-lang-score"
 
     # Lucie annealing datasets
     open_web_math = "open-web-math/open-web-math"
@@ -148,12 +155,13 @@ class DatasetNames(StrEnum):
     # Vietnamese datasets
     wikipedia_vi = "omarkamali/wikipedia-monthly:20250702.vi"
     culturax = "uonlp/CulturaX:vi"
-    madlad400 = "allenai/MADLAD-400:vi"
+    madlad400 = "Symato/madlad-400_vi"
     fineweb2_hq = "epfml/FineWeb2-HQ:vie_Latn"
     bkai_news_corpus = "bkai-foundation-models/BKAINewsCorpus"
     vbpl = "doanhieung/vbpl"
     mtet = "phongmt184172/mtet"
 
+    _LOCK: Lock = None
     _IDS = {}
     _GLOBAL_ID_COUNTER = 0
     _ID_COUNTERS = {}
@@ -166,6 +174,7 @@ class DatasetNames(StrEnum):
     @classmethod
     def _init_cls_vars(cls):
         """Initialize class member variables."""
+        cls._LOCK = Lock()
         cls._IDS = {
             name: i + 1
             for i, name in enumerate(cls.__members__)
@@ -176,7 +185,7 @@ class DatasetNames(StrEnum):
             SMOLLM2.name: {
                 cls.cosmopedia_v2,
                 cls.fineweb_edu_dedup,
-                cls.python_edu,
+                cls.starcoder_python_edu,
                 cls.open_web_math,
                 cls.olmocr_pes2o,
                 cls.stackmathqa,
@@ -194,7 +203,7 @@ class DatasetNames(StrEnum):
         cls.ENGLISH = {
             cls.cosmopedia_v2,
             cls.fineweb_edu_dedup,
-            cls.python_edu,
+            cls.starcoder_python_edu,
             cls.open_web_math,
             cls.olmocr_pes2o,
             cls.stackmathqa,
@@ -237,7 +246,8 @@ class DatasetNames(StrEnum):
     
     @property
     def _counter(self) -> int:
-        return DatasetNames._ID_COUNTERS[self.name]
+        with DatasetNames._LOCK:
+            return DatasetNames._ID_COUNTERS[self.name]
     
     def origin_metadata(self, id: int | str = None) -> dict[str, object]:
         """Add additional metadata about the used source dataset.
@@ -254,7 +264,7 @@ class DatasetNames(StrEnum):
         if id is None:
             metadata['dataset_generated_id'] = self._counter
         else:
-            metadata['original_id'] = id
+            metadata['dataset_generated_id'] = id
         
         return metadata
 
@@ -267,26 +277,19 @@ class DatasetNames(StrEnum):
 
         Returns:
             int: A globally unique row id.
-        
-        Warning
-        -----
-            This function cannot be called concurrently as it mutates a global shared variable.
         """
-        DatasetNames._ID_COUNTERS[self.name] += 1
-        DatasetNames._GLOBAL_ID_COUNTER += 1
-        return DatasetNames._GLOBAL_ID_COUNTER
+        with DatasetNames._LOCK:
+            DatasetNames._ID_COUNTERS[self.name] += 1
+            DatasetNames._GLOBAL_ID_COUNTER += 1
+            # Appending the dataset id ensures consistency in case the global id is reset
+            # e.g. when redownloading a dataset.
+            return self._id + 1000 * DatasetNames._GLOBAL_ID_COUNTER
 
 DatasetNames._init_cls_vars()
 
-
+# TODO: refactor with inheritance and add placeholder url according to the dataset
 class NormalizeCols:
-    """Organize the dataset columns according to a unified format.
-    
-    Warning
-    -----
-        The static methods provided by this class cannot be called concurrently
-        as they mutate global shared state.
-    """
+    """Organize the dataset columns according to a unified format."""
 
     @staticmethod
     def format_prompt_response(prompt: str, response: str) -> str:
@@ -335,13 +338,15 @@ class NormalizeCols:
         )
 
     @staticmethod
-    def python_edu(row: dict) -> dict:
+    def starcoder_python_edu(row: dict) -> dict:
         return dict(
-            id=DatasetNames.python_edu.generate_row_id(),
-            text=row['text'],
+            id=DatasetNames.starcoder_python_edu.generate_row_id(),
+            text=row['content_cleaned'],
             metadata=dict(
-                **filter_keys(row, ['blob_id', 'repo_name', 'path', 'score']),
-                **DatasetNames.python_edu.origin_metadata(),
+                # Fake url, handy for identification purposes
+                url=f"https://github.com/{row['max_stars_repo_name']}/{row['max_stars_repo_path']}",
+                **filter_keys(row, ['language', 'edu_score']),
+                **DatasetNames.starcoder_python_edu.origin_metadata(row['id']),
             ),
         )
     
@@ -352,7 +357,6 @@ class NormalizeCols:
             id=DatasetNames.open_web_math.generate_row_id(),
             text=row['text'],
             metadata=dict(
-                warc_path=row['metadata']['warc_path'],
                 **filter_keys(row, ['url', 'date']),
                 **DatasetNames.open_web_math.origin_metadata(),
             ),
@@ -365,7 +369,7 @@ class NormalizeCols:
             text=NormalizeCols.format_prompt_response(row['Q'], row['A']),
             metadata=dict(
                 **filter_keys(
-                    row,
+                    row['meta'],
                     ['url', 'timestamp', 'source', 'answer_count', 'answer_id', 'question_score'],
                 ),
                 **DatasetNames.stackmathqa.origin_metadata(),
@@ -374,11 +378,21 @@ class NormalizeCols:
     
     @staticmethod
     def olmocr_pes2o(row: dict) -> dict:
+        def remove_null_from_metadata(metadata: dict):
+            # Formatting fields of study as a string avoids problems with Arrow column type
+            # inference when saving an IterableDataset to Parquet.
+            # https://github.com/huggingface/datasets/issues/3738
+            metadata['fieldofstudy'] = '; '.join(metadata['fieldofstudy'])
+            return metadata
+    
         return dict(
             id=DatasetNames.olmocr_pes2o.generate_row_id(),
             text=format_olmocr_pes2o(row['text']),
             metadata=dict(
-                **filter_keys(row['metadata'], ['pdf-total-pages', 'fieldofstudy']),
+                **filter_keys(
+                    remove_null_from_metadata(row['metadata']),
+                    ['pdf-total-pages', 'fieldofstudy']
+                ),
                 **DatasetNames.olmocr_pes2o.origin_metadata(row['id']),
             ),
         )
@@ -400,7 +414,7 @@ class NormalizeCols:
     @staticmethod
     def mathpile_commercial(row: dict) -> dict:
         # TODO: more preprocessing for arXiv and Wikipedia, for example
-        md_text = pypandoc.convert_text(
+        md_content = pypandoc.convert_text(
             row['text'],
             'markdown-' + '-'.join(_DISABLED_PANDOC_MD_EXTENSIONS),
             format='latex',
@@ -411,11 +425,11 @@ class NormalizeCols:
                 _MD_LINK,
                 _MD_LINK_WITH_SQUARE_BRACKETS,
             ]:
-            md_text = pat.sub(lambda m: m.groups()[0], md_text)
+            md_content = replace_md_links_with_text(md_content, pat)
         
         return dict(
             id=DatasetNames.mathpile_commercial.generate_row_id(),
-            text=md_text,
+            text=md_content,
             metadata=dict(
                 **filter_keys(row, ['subset']),
                 **DatasetNames.mathpile_commercial.origin_metadata(row['meta']['id']),
@@ -435,25 +449,25 @@ class NormalizeCols:
     
     @staticmethod
     def wikipedia_en(row: dict) -> dict:
-        row['metadata'] = dict(
-            **filter_keys(row, ['url', 'title']),
-            **DatasetNames.wikipedia_en.origin_metadata(row['id']),
+        return dict(
+            id=DatasetNames.wikipedia_en.generate_row_id(),
+            text=row['text'],
+            metadata=dict(
+                **filter_keys(row, ['url', 'title']),
+                **DatasetNames.wikipedia_en.origin_metadata(row['id']),
+            )
         )
-        del row['url']
-        del row['title']
-        row['id'] = DatasetNames.wikipedia_en.generate_row_id()
-        return row
 
     @staticmethod
     def wikipedia_vi(row: dict) -> dict:
-        row['metadata'] = dict(
-            **filter_keys(row, ['url', 'title']),
-            **DatasetNames.wikipedia_vi.origin_metadata(row['id']),
+        return dict(
+            id=DatasetNames.wikipedia_vi.generate_row_id(),
+            text=row['text'],
+            metadata=dict(
+                **filter_keys(row, ['url', 'title']),
+                **DatasetNames.wikipedia_vi.origin_metadata(row['id']),
+            )
         )
-        del row['url']
-        del row['title']
-        row['id'] = DatasetNames.wikipedia_vi.generate_row_id()
-        return row
 
     @staticmethod
     def culturax(row: dict) -> dict:
@@ -462,7 +476,7 @@ class NormalizeCols:
             text=row['text'],
             metadata=dict(
                 **filter_keys(row, ['url', 'timestamp', 'source']),
-                **DatasetNames.culturax.origin_metadata(row['id']),
+                **DatasetNames.culturax.origin_metadata(),
             )
         )
 
@@ -488,21 +502,21 @@ class NormalizeCols:
 
     @staticmethod
     def bkai_news(row: dict) -> dict:
-        row['metadata'] = dict(
-            url=row['link'],
-            date=parse_publication_date(row['publish']).strftime("%Y-%m-%dT%H:%M:%S%z"),
-            **DatasetNames.bkai_news_corpus.origin_metadata(row['id'])
+        return dict(
+            id=DatasetNames.bkai_news_corpus.generate_row_id(),
+            text=row['text'],
+            metadata=dict(
+                url=row['link'],
+                date=parse_publication_date(row['publish']).strftime("%Y-%m-%dT%H:%M:%S%z"),
+                **DatasetNames.bkai_news_corpus.origin_metadata(row['id'])
+            )
         )
-        del row['link']
-        del row['publish']
-        row['id'] = DatasetNames.bkai_news_corpus.generate_row_id()
-        return row
 
     @staticmethod
     def vbpl(row: dict) -> dict:
         return dict(
             id=DatasetNames.vbpl.generate_row_id(),
-            text=row['text'],
+            text=row['markdown_content'],
             metadata=dict(
                 title=row["Tiêu đề"],
                 scope=row["Phạm vi"],
