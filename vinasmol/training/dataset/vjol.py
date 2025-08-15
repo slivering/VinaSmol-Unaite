@@ -10,6 +10,7 @@ import re
 import time
 
 from datasets import Dataset, IterableDataset, DatasetBuilder, load_dataset_builder
+import requests
 from requests import Session
 from sickle import Sickle
 from sickle.app import Record
@@ -26,7 +27,7 @@ Url = str
 JournalId = str
 RecordMetadata = dict[str, list]
 
-MAX_CONCURRENT_DOWNLOADS = 4
+MAX_SIMULTANEOUS_DOWNLOADS = 4
 
 VJOL_BASE_URL = "https://vjol.info.vn/index.php"
 LOGFILE = DATA_DIR / "vjol" / "vjol.log"
@@ -40,6 +41,10 @@ logger = logging.getLogger(__name__)
 class PaperProcessor:
     def __init__(self):
         self.pdf_to_md: dict[Path, Path] = {}
+    
+    def postprocess_md(self, md_content: str) -> str:
+        """Clean the markdown content to remove superfluous items."""
+        raise NotImplementedError
 
     async def convert_pdf(self, pdf_file: str | Path, output_md_file: str | Path):
         """Process a PDF paper using scienceparse.
@@ -116,8 +121,6 @@ class VjolDownloader:
         self.api_urls: dict[JournalId, Url] = {}
         self.records: dict[JournalId, list[RecordMetadata]] = {}
         self.pdfs: list[Path] = []
-
-        self.download_semaphore = asyncio.Semaphore(MAX_CONCURRENT_DOWNLOADS)
     
     def _new_session(self) -> Session:
         session = Session()
@@ -149,13 +152,9 @@ class VjolDownloader:
         r = session.get(self.base_url)
         html_content = r.text
 
-        # user/register is more systematically VJOL
-        vjol_link_format = f'<a href="{self.base_url}/_journal_/user/register">'
-        vjol_journal_re = re.escape(vjol_link_format).replace(r'_journal_', r'(\w+)')
-        vjol_journals = re.findall(vjol_journal_re, html_content)
+        # https://vjol.info.vn/index.php/index/oai is a superset of all the journals on VJOL
         vjol_apis = {
-            journal: f"{self.base_url}/{journal}/oai"
-            for journal in vjol_journals
+            "index": f"{self.base_url}/index/oai"
         }
         
         # Sometimes VJOL links to other websites with a different journal identifier
@@ -170,7 +169,7 @@ class VjolDownloader:
                 case ["en" | "vi" | "vn"] | ["index.php", "en" | "vi" | "vn"] | ["index.php"]:
                     return domain
                 case [identifier] | ["index.php", identifier]:
-                    return f"{domain}:{identifier}"
+                    return f"{domain}_{identifier}"
                 case _:
                     return domain
 
@@ -201,7 +200,7 @@ class VjolDownloader:
         logger.info("Found %d journals available with an OAI API", len(self.api_urls))
 
         api_urls_json = self.records_dir / "api_urls.json"
-        api_urls_json.write_text(json.dumps(self.api_urls))
+        api_urls_json.write_text(json.dumps(self.api_urls, indent=2))
 
         return self.api_urls
 
@@ -228,6 +227,12 @@ class VjolDownloader:
             except NoRecordsMatch:
                 logger.error(
                     "No matching records in %s.",
+                    oai_api_url
+                )
+                return []
+            except requests.exceptions.RequestException:
+                logger.exception(
+                    "Failed to list records at %s, see traceback below.",
                     oai_api_url
                 )
                 return []
@@ -295,8 +300,6 @@ class VjolDownloader:
                     self.api_urls.items(),
                     desc="Get all records for each journal",
                 ):
-                time.sleep(self._sample_ratelimit_duration())
-
                 journal_records_json = self.records_dir / journal / "records.json"
 
                 if journal_records_json.exists() and not self.force_refresh_records:
@@ -306,22 +309,28 @@ class VjolDownloader:
                     )
                     self.records[journal] = json.loads(journal_records_json.read_text())
                 else:
+                    time.sleep(self._sample_ratelimit_duration())
                     self.records[journal] = VjolDownloader.get_records(api_url, session=session)
                     journal_records_json.parent.mkdir(parents=True, exist_ok=True)
-                    journal_records_json.write_text(json.dumps(self.records[journal]))
-                
-                logger.info(
-                    "Found %d records for journal %s",
-                    len(self.records[journal]), journal,
-                )
+                    journal_records_json.write_text(json.dumps(self.records[journal], indent=2))
+
+                if not self.records[journal]:
+                    logger.info(
+                        "Journal %s won't be included in the dataset as it has no records",
+                        journal,
+                    )
+                    del self.records[journal]
+                else:
+                    logger.info(
+                        "Found %d records for journal %s",
+                        len(self.records[journal]), journal,
+                    )
         
-        num_total_records = sum(len(part) for part in self.records)
-        num_active = sum(len(journal_records) > 0 for journal_records in self.records.values())
-        num_empty = len(self.records) - num_active
-        logger.warning("%d journals had no records", num_empty)
+        num_total_records = sum(len(part) for part in self.records.values())
+        num_journals = len(self.records)
         logger.info(
             "Found a total of %d records across all %d journals",
-            num_total_records, num_active,
+            num_total_records, num_journals,
         )
         return self.records
 
@@ -330,13 +339,14 @@ class VjolDownloader:
             pdf_url: str,
             output_file: str | Path,
             session: aiohttp.ClientSession,
+            semaphore: asyncio.BoundedSemaphore,
         ) -> DownloadResult:
         output_file = Path(output_file)
         if output_file.exists():
             # Skip item when resuming downloads
             return DownloadResult(success=True, already_downloaded=True, file_path=output_file)
-        
-        async with self.download_semaphore:
+
+        async with semaphore:
             async with session.get(pdf_url) as response:
                 content_type = response.headers.get("Content-Type")
                 if content_type != "application/pdf":
@@ -352,8 +362,14 @@ class VjolDownloader:
                         if not chunk:
                             break
                         file.write(chunk)
-        
+
         return DownloadResult(success=True, content_type=content_type, file_path=output_file)
+
+    async def _download_worker(self, queue: asyncio.Queue):
+        pdf_url, output_file, session = await queue.get()
+        await asyncio.sleep(self._sample_ratelimit_duration())
+        result = await self._download_pdf(pdf_url, output_file, session)
+        return result
 
     async def download_records_as_pdf(self) -> list[Path]:
         """Downloads all of the PDFs from the downloaded VJOL records metadata.
@@ -367,59 +383,59 @@ class VjolDownloader:
                     self.records.items(),
                     desc="Download journal PDFs",
                 ):
-                # Concurrent downloads for a single journal
-                tasks = []
-                for record in journal_records:
-                    await asyncio.sleep(self._sample_ratelimit_duration())
 
+                # Async downloads for a single journal
+                tasks = []
+                semaphore = asyncio.BoundedSemaphore(MAX_SIMULTANEOUS_DOWNLOADS)
+                for record in journal_records:
                     article_url: str = record['identifier'][0]
                     article_id = article_url.split('/')[-1]
                     output_file = self.pdf_dir / journal / f"{article_id}.pdf"
-
                     record['local_pdf_file'] = output_file
-                    task = self._download_pdf(
+                    tasks.append(self._download_pdf(
                         record['pdf_url'],
                         output_file,
-                        session=download_session,
-                    )
-                    tasks.append(task)
-            
-                # TODO: handle a few exceptions gracefully and log errors
-
-                results = await asyncio.gather(*tasks, return_exceptions=True)
-
-                exceptions = []
-                not_exceptions = []
-                already_downloaded = []
-                not_success = []
-                num_success = 0
-                for result in results:
-                    if isinstance(result, Exception):
-                        exceptions.append(result)
-                    elif isinstance(result, DownloadResult):
-                        not_exceptions.append(result)
-                        if result.already_downloaded:
-                            already_downloaded.append(result)
-                        if not result.success:
-                            not_success.append(result)
-                        else:
-                            assert result.file_path is not None
-                            self.pdfs.append(result.file_path)
-                            num_success += 1
-                    else:
-                        raise RuntimeError(f"Invalid result: {type(result)}")
+                        download_session,
+                        semaphore,
+                    ))
                 
-                logger.info("%d PDFs downloaded for journal %s", num_success, journal)
-                if exceptions:
-                    logger.error("%d exceptions below:", len(exceptions))
-                    for (i, exception) in enumerate(exceptions):
-                        logger.error("Exception #%d: %s", i, exception)
-                if already_downloaded:
-                    logger.info("%d PDFs already downloaded", len(already_downloaded))
-                if not_success:
-                    logger.error("%d files with incorrect content type", len(not_success))
+                results = await asyncio.gather(*tasks, return_exceptions=True)
+                self.collect_pdfs(results, journal)
 
         return self.pdfs
+    
+    def _collect_pdfs(self, results: list[DownloadResult | Exception], journal: JournalId):
+        """Collect the successfully downloaded PDFs into `self.pdfs`."""
+        exceptions = []
+        not_exceptions = []
+        already_downloaded = []
+        not_success = []
+        num_success = 0
+        for result in results:
+            if isinstance(result, Exception):
+                exceptions.append(result)
+            elif isinstance(result, DownloadResult):
+                not_exceptions.append(result)
+                if result.already_downloaded:
+                    already_downloaded.append(result)
+                if not result.success:
+                    not_success.append(result)
+                else:
+                    assert result.file_path is not None
+                    self.pdfs.append(result.file_path)
+                    num_success += 1
+            else:
+                raise RuntimeError(f"Invalid result: {type(result)}")
+        
+        logger.info("%d PDFs downloaded for journal %s", num_success, journal)
+        if exceptions:
+            logger.error("%d exceptions below:", len(exceptions))
+            for (i, exception) in enumerate(exceptions):
+                logger.error("Exception #%d: %s", i, exception)
+        if already_downloaded:
+            logger.info("%d PDFs already downloaded", len(already_downloaded))
+        if not_success:
+            logger.error("%d files with incorrect content type", len(not_success))
     
     def download_dataset_pdfs(self) -> list[Path]:
         """Downloads all of the PDFs of the VJOL records.
