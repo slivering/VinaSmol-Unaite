@@ -22,15 +22,17 @@ The [SmolLM Corpus](https://huggingface.co/datasets/HuggingFaceTB/smollm-corpus)
 
 #### In-house datasets
 
-We compile a new dataset by downloading academic papers from [VJOL](https://vjol.info.vn) and processing them with [science-parse](https://github.com/allenai/science-parse).
+We compile a new dataset by downloading 37000 academic papers from 26 journals referenced by [VJOL](https://vjol.info.vn) and processing them with [Docling](https://github.com/docling-project/docling).
 
-We will release the VJOL dataset soon. In order to reproduce it, start [ucrel-science-parse](https://hub.docker.com/r/ucrel/ucrel-science-parse) Docker server:
+The Python file [vjol.py](./vjol.py) will download the papers, process the PDFs and save the newly created dataset to be used for SmolLM Vietnamese training data. You can launch the script with the following Python command:
 
 ```bash
-docker run -p 127.0.0.1:8080:8080 --rm --init --memory=6g --memory-swap=6g --env JAVA_MEMORY=5 ucrel/ucrel-science-parse:3.0.1
+python -m vinasmol.training.dataset.vjol --simultaneous-downloads 8
 ```
 
-The Python file [vjol.py](./vjol.py) will download the necessary files and include the newly created dataset in SmolLM Vietnamese training data.
+Downloading metadata and the papers can take a few hours. Expect around 50GB of PDF downloads for approximately 100M Vietnamese tokens. Conversion to Markdown should take a few days on a single-GPU machine.
+
+The script will resume where it left off if you execute it a second time.
 
 ### Training budget
 

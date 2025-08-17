@@ -7,12 +7,14 @@ requires-python = ">=3.12"
 dependencies = [
     "accelerate",
     "aiohttp",
+    "certifi",
     "datasets",
     "datatrove[io,processing,cli]",
     "ftfy",
     "gguf",
     #"goodwiki", # TODO: fork this repo because it's outdated
     "jsonlines",
+    "loguru",
     "matplotlib",
     "pandas",
     "pypandoc",
@@ -25,6 +27,7 @@ dependencies = [
     "sickle",
     "torch",
     "transformers",
+    "typer",
 ]
 
 [dependency-groups]
