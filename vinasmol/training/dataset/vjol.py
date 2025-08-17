@@ -15,6 +15,7 @@ import time
 from datasets import Dataset, DatasetBuilder, load_dataset_builder
 import requests
 from requests import Session
+import rich
 from sickle import Sickle
 from sickle.app import Record
 from sickle.oaiexceptions import NoRecordsMatch
@@ -168,8 +169,9 @@ class VjolDownloader:
         html_content = r.text
 
         # https://vjol.info.vn/index.php/index/oai is a superset of all the journals on VJOL
+        # FIXME: this creates a mega-journal which should be split later on
         vjol_apis = {
-            "index": f"{self.base_url}/index/oai"
+            "vjol.info.vn_index": f"{self.base_url}/index/oai"
         }
         
         # Sometimes VJOL links to other websites with a different journal identifier
@@ -204,7 +206,7 @@ class VjolDownloader:
         """Download the VJOL journal API urls to the records directory as `api_urls.json`.
         
         Returns:
-            api_urls (dict): the OAI API urls for each VJOL journal.
+            api_urls (dict): the OAI-PMH API urls for each VJOL journal.
         """
         api_urls_json = self.records_dir / "api_urls.json"
 
@@ -214,6 +216,18 @@ class VjolDownloader:
                 api_urls_json,
             )
             self.api_urls = json.loads(api_urls_json.read_text())
+            return self.api_urls
+
+        rich.print(
+            f"Did not find {api_urls_json}. This script will retrieve all journals "
+            "from https://vjol.info.vn which is an open-access Vietnamese library provider.",
+            "[red]However, some journals on VJOL do not specify an explicit CC license.\n",
+            "Consider running the notebook ./doaj_vn.ipynb first to download "
+            "API urls of [green]permissively-licensed journals[/green] "
+            "indexed by https://doaj.org ."
+        )
+        if not typer.confirm("Continue?"):
+            raise SystemExit
         
         with self._new_session() as session:
             logger.debug("Scraping journal API urls")
@@ -269,6 +283,11 @@ class VjolDownloader:
             if 'relation' not in meta:
                 file_missing.append(record_id.split('/')[-1])
                 continue
+            meta['relation'] = [
+                url for url in meta['relation']
+                if "downloadSuppFile" not in url
+            ]
+
             if 'language' not in meta:
                 # Language attribute is not reliable, so don't use it for filtering
                 logger.warning("Missing language attribute for {}", record_id)
@@ -276,7 +295,7 @@ class VjolDownloader:
                 logger.warning("Missing format attribute for {}", record_id)
             elif "application/pdf" not in meta['format']:
                 # Word and HTML are rare so we discard them for simplicity
-                logger.warning(
+                logger.info(
                     "Dropping record {} due to unhandled format: {}",
                     record_id,
                     meta['format'],
@@ -304,16 +323,20 @@ class VjolDownloader:
                 )
                 continue
 
+            # if "vjol" in oai_api_url:
+            #     journal = meta['identifier'][0].split('/')[-4]
+
             metadata.append(meta)
         
-        logger.warning(
-            "Dropped {} records without a download link: {}",
-            len(file_missing), file_missing,
-        )
+        if file_missing:
+            logger.warning(
+                "Dropped {} records without a download link: {}",
+                len(file_missing), file_missing,
+            )
         
         num_skipped = len(records) - len(metadata)
         if num_skipped > 0:
-            logger.warning(
+            logger.info(
                 "Skipped {} records due to incomplete or invalid metadata or invalid format",
                 num_skipped,
             )
@@ -611,7 +634,6 @@ def setup_logging(logfile: Path):
     )
     logger.configure(handlers=[dict(sink=lambda msg: tqdm.write(msg, end=''), colorize=True)])
     logger.add(logfile, format="{time} {level} {message}", level="DEBUG", rotation="100 MB")
-
 
 
 app = typer.Typer(pretty_exceptions_show_locals=False)

@@ -22,9 +22,11 @@ The [SmolLM Corpus](https://huggingface.co/datasets/HuggingFaceTB/smollm-corpus)
 
 #### In-house datasets
 
-We compile a new dataset by downloading 37000 academic papers from 26 journals referenced by [VJOL](https://vjol.info.vn) and processing them with [Docling](https://github.com/docling-project/docling).
+We compile a new dataset by downloading 12000 academic papers from 18 permissively-licensed journals referenced by [DOAJ](https://doaj.org) and/or [VJOL](https://vjol.info.vn) and processing them with [Docling](https://github.com/docling-project/docling).
 
-The Python file [vjol.py](./vjol.py) will download the papers, process the PDFs and save the newly created dataset to be used for SmolLM Vietnamese training data. You can launch the script with the following Python command:
+To download the [OAI-PMH](https://www.openarchives.org/pmh/) API endpoints for harvesting, run the Jupyter notebook `doaj_vn.ipynb`.
+
+The Python file [vjol.py](./vjol.py) will then download the papers, process the PDFs and save the newly created dataset to be used for SmolLM Vietnamese training data. You can launch the script with the following Python command:
 
 ```bash
 python -m vinasmol.training.dataset.vjol --simultaneous-downloads 8

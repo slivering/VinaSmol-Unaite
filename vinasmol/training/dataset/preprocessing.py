@@ -122,7 +122,7 @@ def _set_text_as_md_in_vbpl(row: dict) -> dict:
 class DatasetNames(StrEnum):
     _ignore_ = [
         '_IDS', '_ID_COUNTERS', '_GLOBAL_ID_COUNTER',
-        'ENABLED', 'ENGLISH', 'VIETNAMESE', 'CODE',
+        '_ENABLED', 'ENGLISH', 'VIETNAMESE', 'CODE',
     ]
 
     # SmolLM corpus

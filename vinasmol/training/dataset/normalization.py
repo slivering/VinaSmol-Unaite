@@ -42,7 +42,7 @@ class Formatter(BaseFormatter):
         if self.normalize_punctuation:
             table = {
                 ord(punct): replacement
-                for punct, replacement in UNICODE_PUNCTUATION
+                for punct, replacement in UNICODE_PUNCTUATION.items()
             }
             text = text.translate(table)
 
