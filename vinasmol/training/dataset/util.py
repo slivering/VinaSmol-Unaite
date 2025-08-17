@@ -1,8 +1,10 @@
+from abc import ABC, abstractmethod
 import asyncio
 from collections import deque
 import contextlib
 from dataclasses import dataclass
-import logging
+import json
+from loguru import logger
 from pathlib import Path
 import ssl
 import time
@@ -94,12 +96,12 @@ def auto_patch_ssl_verification(url: str, session: requests.Session):
 
     secure = is_ssl_certificate_valid(url, session)
     if not secure:
-        logging.info("Couldn't find SSL certificate for %s, using certifi", host)
+        logger.info("Couldn't find SSL certificate for %s, using certifi", host)
         session.verify
         session.cert = certifi_cafile
         secure = is_ssl_certificate_valid(url, session)
         if not secure:
-            logging.warning(
+            logger.warning(
                 "SSL certificate for %s is not recognized by certifi, "
                 "requests to this host will be insecure",
                 host,
@@ -121,14 +123,14 @@ async def auto_patch_ssl_verification_async(url: str, session: aiohttp.ClientSes
     patch_ssl_context = not secure
 
     if not secure:
-        logging.info(
+        logger.info(
             "Couldn't find SSL certificate for %s, patching context with certifi",
             host,
         )
         session._connector = aiohttp.TCPConnector(ssl=certifi_ssl_context)
         secure = await is_ssl_certificate_valid_async(url, session)
         if not secure:
-            logging.warning(
+            logger.warning(
                 "SSL certificate for %s is not recognized by certifi, "
                 "requests to this host will be insecure",
                 host,
@@ -141,6 +143,40 @@ async def auto_patch_ssl_verification_async(url: str, session: aiohttp.ClientSes
         if patch_ssl_context:
             await session._connector.close()
             session._connector = old_session_connector
+
+
+class JSONResource(ABC):
+    """A JSON-serializable resource which is bound to a disk file."""
+    def __init__(self, file_path: Path, autoload: bool = True):
+        super().__init__()
+        self.file_path = Path(file_path)
+        if autoload and self.file_path.is_file():
+            self.load()
+    
+    def read(self):
+        return json.loads(self.file_path.read_text())
+
+    @abstractmethod
+    def load_with(self, content):
+        ...
+
+    def load(self):
+        self.load_with(self.read())
+    
+    def save(self):
+        self.file_path.parent.mkdir(parents=True, exist_ok=True)
+        self.file_path.write_text(json.dumps(self, indent=2))
+    
+    def __repr__(self):
+        return f"JSONResource(file_path={self.file_path})"
+
+class DictResource(JSONResource, dict):
+    def load_with(self, content: dict):
+        self.update(content)
+
+class ListResource(JSONResource, list):
+    def load_with(self, content: list):
+        self.extend(content)
 
 
 class BandwidthMeter:
@@ -172,6 +208,29 @@ class DownloadResult:
     content_type: str | None = None
     content_length: int = 0
     already_downloaded: bool = False
+
+@dataclass()
+class LicenseResult:
+    # https://.../article/view/xxx/yyy
+    url: str
+
+    # https://creativecommons.org URLs
+    licenses: list[str]
+
+    def is_acceptable(self) -> bool:
+        versions = ["4.0"]
+        variants = ["by", "by-sa", "by-nc", "by-nc-sa"]
+        return any(
+            f"{variant}/{version}" in license
+            for license in self.licenses for variant in variants for version in versions
+        )
+
+def _cc_ident(url: str) -> str:
+    return urlparse(url).path.removesuffix('/')
+
+def cc_right_in_licenses(right: str, licenses: list[str]) -> bool:
+    ident = _cc_ident(right)
+    return any(_cc_ident(license) == ident for license in licenses)
 
 class DownloadTracker(tqdm_asyncio):
     def __init__(self, iterable=None, *args, **kwargs):
@@ -212,11 +271,16 @@ class DownloadTracker(tqdm_asyncio):
             results.append((i, result))
             if isinstance(result, DownloadResult):
                 url = "..." + "/".join(result.url.split("/")[-2:])
-                meter.update(result.content_length / 2**20)
-            else:
+                if result.success:
+                    meter.update(result.content_length / 2**20)
+                pbar.set_postfix(url=url, speed=f"{meter.speed:.2g} MB/s", refresh=True)
+            elif isinstance(result, LicenseResult):
+                url = "..." + "/".join(result.url.split("/")[-2:])
+                pbar.set_postfix(url=url, refresh=True)
+            elif isinstance(result, Exception):
                 url = "Download error"
                 meter.update(0.0)
-            pbar.set_postfix(url=url, speed=f"{meter.speed:.2g} MB/s", refresh=True)
+                pbar.set_postfix(url=url, refresh=True)
 
         return [res for _, res in sorted(results)]
 

@@ -2,7 +2,6 @@ from dataclasses import dataclass
 from urllib.parse import urlparse, urlsplit
 import aiohttp
 import asyncio
-import json
 import logging
 from loguru import logger
 import os
@@ -26,6 +25,10 @@ import typer
 from . import DATA_DIR
 
 from .util import (
+    DictResource,
+    ListResource,
+    LicenseResult,
+    cc_right_in_licenses,
     auto_patch_ssl_verification,
     auto_patch_ssl_verification_async,
     DownloadResult,
@@ -45,6 +48,10 @@ RECORDS_DOWNLOAD_DIR = DATA_DIR / "vjol" / "records"
 PDF_DOWNLOAD_DIR = DATA_DIR / "vjol" / "pdf"
 OUT_DATASET_DIR = DATA_DIR / "vjol" / "parquet"
 REPO_ID = "vjol"
+
+_LICENSE_RE = re.compile(
+    r'"(https?://creativecommons\.org/(?:licenses|publicdomain)/(?:[a-z0-9/\.-])+)"'
+)
 
 
 @dataclass
@@ -117,7 +124,6 @@ class VjolDownloader:
             base_url: str,
             pdf_dir: Path,
             records_dir: Path = RECORDS_DOWNLOAD_DIR,
-            dataset_dir: Path = OUT_DATASET_DIR,
             simultaneous_downloads: int = SIMULTANEOUS_DOWNLOADS,
             user_agent: str = "vinasmol-training",
             force_refresh_records: bool = False,
@@ -133,9 +139,14 @@ class VjolDownloader:
         self.user_agent = user_agent
         self.force_refresh_records = force_refresh_records
 
-        self.api_urls: dict[JournalId, Url] = {}
-        self.records: dict[JournalId, list[RecordMetadata]] = {}
+        self.api_urls: DictResource[JournalId, Url] = DictResource(
+            file_path = self.records_dir / "api_urls.json"
+        )
+        self.records: dict[JournalId, ListResource[RecordMetadata]] = {}
         self.pdfs: list[Path] = []
+        self.licenses: DictResource[Url, list[Url]] = DictResource(
+            file_path = self.records_dir / "licenses.json"
+        )
     
     def _new_session(self) -> Session:
         session = Session()
@@ -202,24 +213,19 @@ class VjolDownloader:
 
         return vjol_apis | external_apis
 
-    def download_api_urls(self) -> dict:
+    def download_api_urls(self) -> DictResource[JournalId, Url]:
         """Download the VJOL journal API urls to the records directory as `api_urls.json`.
         
         Returns:
-            api_urls (dict): the OAI-PMH API urls for each VJOL journal.
+            api_urls (JSONDictResource): the OAI-PMH API urls for each VJOL journal.
         """
-        api_urls_json = self.records_dir / "api_urls.json"
-
-        if api_urls_json.exists() and not self.force_refresh_records:
-            logger.info(
-                "API URLs already downloaded, loading {}",
-                api_urls_json,
-            )
-            self.api_urls = json.loads(api_urls_json.read_text())
+        fp = self.api_urls.file_path
+        if self.api_urls and not self.force_refresh_records:
+            logger.info("API URLs already downloaded at {}", fp)
             return self.api_urls
 
         rich.print(
-            f"Did not find {api_urls_json}. This script will retrieve all journals "
+            f"Creating or refreshing {fp.name}. This script will retrieve all journals "
             "from https://vjol.info.vn which is an open-access Vietnamese library provider.",
             "[red]However, some journals on VJOL do not specify an explicit CC license.\n",
             "Consider running the notebook ./doaj_vn.ipynb first to download "
@@ -231,12 +237,10 @@ class VjolDownloader:
         
         with self._new_session() as session:
             logger.debug("Scraping journal API urls")
-            self.api_urls = self._scrape_journal_api_urls(session=session)
+            self.api_urls.update(self._scrape_journal_api_urls(session=session))
         
         logger.info("Found {} journals available with an OAI API", len(self.api_urls))
-
-        api_urls_json.write_text(json.dumps(self.api_urls, indent=2))
-
+        self.api_urls.save()
         return self.api_urls
 
     @classmethod
@@ -272,11 +276,11 @@ class VjolDownloader:
                 )
                 return []
 
-            records: list[Record] = list(tqdm(records_iter, f"{oai_api_url} records"))
+            oai_records: list[Record] = list(tqdm(records_iter, f"{oai_api_url} records"))
 
         metadata = []
         file_missing = []
-        for record in records:
+        for record in oai_records:
             meta = record.metadata
             record_id = meta['identifier'][0]
 
@@ -314,9 +318,10 @@ class VjolDownloader:
             # Sometimes meta['relation'] contains the DOI
             for i in range(len(meta['relation']) - 1, -1, -1):
                 if 'view' in meta['relation'][i]:
-                    meta['pdf_url'] = meta['relation'][i].replace('view', 'download')
+                    meta['view_url'] = meta['relation'][i]
+                    meta['download_url'].replace('view', 'download')
                     break
-            if 'pdf_url' not in meta:
+            if 'download_url' not in meta:
                 logger.error(
                     "Record {} has no valid PDF download link in {}",
                     record_id, meta['relation'],
@@ -334,7 +339,7 @@ class VjolDownloader:
                 len(file_missing), file_missing,
             )
         
-        num_skipped = len(records) - len(metadata)
+        num_skipped = len(oai_records) - len(metadata)
         if num_skipped > 0:
             logger.info(
                 "Skipped {} records due to incomplete or invalid metadata or invalid format",
@@ -343,30 +348,33 @@ class VjolDownloader:
 
         return metadata
 
-    def download_records_metadata(self) -> dict[JournalId, list[RecordMetadata]]:
+    def download_records_metadata(self) -> dict[JournalId, ListResource[RecordMetadata]]:
         """Get all of the records available on VJOL and downloads their metadata.
 
         Returns:
             records (dict[JournalId, list[RecordMetadata]]): the records by journal.
         """
         with self._new_session() as session:
+            # TODO: get records in parallel
             for journal, api_url in tqdm(
                     self.api_urls.items(),
                     desc="Get all records for each journal",
                 ):
-                journal_records_json = self.records_dir / journal / "records.json"
+                self.records[journal] = ListResource(
+                    file_path = self.records_dir / journal / "records.json"
+                )
 
-                if journal_records_json.exists() and not self.force_refresh_records:
+                if self.records[journal] and not self.force_refresh_records:
                     logger.info(
-                        "Records for {} already downloaded, loading {}",
-                        journal, journal_records_json,
+                        "Records for {} already downloaded at {}",
+                        journal, self.records[journal].file_path,
                     )
-                    self.records[journal] = json.loads(journal_records_json.read_text())
                 else:
                     time.sleep(self._sample_ratelimit_duration())
-                    self.records[journal] = VjolDownloader.get_records(api_url, session=session)
-                    journal_records_json.parent.mkdir(parents=True, exist_ok=True)
-                    journal_records_json.write_text(json.dumps(self.records[journal], indent=2))
+                    
+                    journal_records = VjolDownloader.get_records(api_url, session=session)
+                    self.records[journal].load_with(journal_records)
+                    self.records[journal].save()
 
                 if not self.records[journal]:
                     logger.info(
@@ -388,9 +396,32 @@ class VjolDownloader:
         )
         return self.records
 
+    async def _find_licenses(
+            self,
+            view_url: str,
+            session: aiohttp.ClientSession,
+            semaphore: asyncio.BoundedSemaphore,
+        ) -> LicenseResult:
+        """Scrape a CreativeCommons license from a publication page.
+
+        Args:
+            view_url (str): the article view URL, ends with `/article/view/xxx/yyy`.
+
+        Returns:
+            LicenseResult: the list of extracted licenses from the HTML page.
+        """
+        async with semaphore:
+            await asyncio.sleep(self._sample_ratelimit_duration())
+            logger.debug("Checking record license at {}", view_url)
+            async with session.get(view_url) as response:
+                response.raise_for_status()
+                html_content = await response.text()
+                licenses = _LICENSE_RE.findall(html_content)
+                return LicenseResult(url=view_url, licenses=licenses)
+        
     async def _download_pdf(
             self,
-            pdf_url: str,
+            download_url: str,
             output_file: str | Path,
             session: aiohttp.ClientSession,
             semaphore: asyncio.BoundedSemaphore,
@@ -400,26 +431,26 @@ class VjolDownloader:
             # Skip item when resuming downloads
             return DownloadResult(
                 success=True,
-                url=pdf_url,
+                url=download_url,
                 already_downloaded=True,
                 file_path=output_file,
             )
 
         async with semaphore:
             await asyncio.sleep(self._sample_ratelimit_duration())
-            logger.debug("Downloading {}", pdf_url)
-            async with session.get(pdf_url) as response:
+            logger.debug("Downloading {}", download_url)
+            async with session.get(download_url) as response:
                 response.raise_for_status()
                 
                 content_type = response.headers.get("Content-Type")
                 if content_type != "application/pdf":
                     logger.error(
                         "Specified content type for {} is not application/pdf but {}",
-                        pdf_url, content_type,
+                        download_url, content_type,
                     )
                     return DownloadResult(
                         success=False,
-                        url=pdf_url,
+                        url=download_url,
                         content_type=content_type,
                     )
 
@@ -436,7 +467,7 @@ class VjolDownloader:
                                 logger.error(
                                     "Expected PDF content for {} but got invalid file header: {},"
                                     " aborting download",
-                                    pdf_url, chunk[:4],
+                                    download_url, chunk[:4],
                                 )
                                 break
                             file.write(chunk)
@@ -453,11 +484,95 @@ class VjolDownloader:
 
         return DownloadResult(
             success=True,
-            url=pdf_url,
+            url=download_url,
             content_type=content_type,
             file_path=output_file,
             content_length=content_length,
         )
+
+    async def get_available_licenses(self) -> dict[Url, LicenseResult]:
+        """Determine the licenses for all records.
+
+        Returns:
+            list[LicenseResult]: the list of license results.
+
+        # Notes
+
+        The CC license for an article is scraped from its HTML webpage. If it's not found,
+        the journal's license (which is compatible if indexed by DOAJ) is assumed to hold.
+        """
+        for journal, journal_records in tqdm(
+                self.records.items(),
+                desc="Checking individual paper licenses for each journal",
+                unit="journals",
+            ):
+            async with self._new_async_session() as download_session:
+                sample_url: Url = self.api_urls[journal]
+                domain = urlparse(sample_url).hostname
+                async with auto_patch_ssl_verification_async(sample_url, download_session):
+                    # Async downloads for a single journal
+                    tasks = []
+                    semaphore = asyncio.BoundedSemaphore(self.simultaneous_downloads)
+                    for record in journal_records:
+                        article_view_url: str = record['view_url']
+                        if article_view_url in self.licenses:
+                            # License is already downloaded
+                            continue
+                        tasks.append(self._find_licenses(
+                            article_view_url,
+                            download_session,
+                            semaphore,
+                        ))
+
+                    # In case user hits Ctrl+C
+                    logging.getLogger('asyncio').addFilter(
+                        lambda record: not record.getMessage().startswith(
+                            "Task was destroyed but it is pending!"
+                        )
+                    )
+                    results = await DownloadTracker.gather(
+                        *tasks,
+                        return_exceptions=True,
+                        desc=f"Checking individual paper licenses from {journal} ({domain})",
+                        unit="papers",
+                    )
+                    for result in results:
+                        if isinstance(result, LicenseResult):
+                            self.licenses[result.url] = result.licenses
+                        else:
+                            assert isinstance(result, Exception)
+                            logger.error("Error scraping license:\n {}", result)
+                    
+                    for record in tqdm(self.records[journal], desc="Merging licenses"):
+                        licenses = self.licenses.get(record['download_url']) or []
+
+                        # Find additional licenses in metadata
+                        cc_in_meta = []
+                        if 'description' in record and record['description'][0]:
+                            if cc_desc := _LICENSE_RE.search(record['description'][0]):
+                                cc_in_meta.append(cc_desc)
+                        
+                        for right in record.get('rights', []):
+                            if right.startswith('http'):
+                                cc_in_meta.append(right)
+                        
+                        for adt_license in cc_in_meta:
+                            if not cc_right_in_licenses(adt_license, licenses):
+                                licenses.append(adt_license)
+                        
+                        self.licenses[record['download_url']] = licenses
+                        record['license'] = licenses
+                        self.records[journal].save()
+                        self.licenses.save()
+            
+            self.licenses.save()
+
+        num_incompatible = sum(
+            not LicenseResult(url, license).is_acceptable()
+            for url, license in self.licenses.items()
+        )
+        logger.info("Found {} incompatible licenses in total", num_incompatible)
+        return self.licenses
 
     async def download_records_as_pdf(self) -> list[Path]:
         """Downloads all of the PDFs from the downloaded VJOL records metadata.
@@ -479,12 +594,20 @@ class VjolDownloader:
                     tasks = []
                     semaphore = asyncio.BoundedSemaphore(self.simultaneous_downloads)
                     for record in journal_records:
-                        article_url: str = record['identifier'][0]
-                        article_id = article_url.split('/')[-1]
-                        output_file = self.pdf_dir / journal / f"{article_id}.pdf"
+                        view_url: str = record['identifier'][0]
+                        license: Url | None = record['license']
+                        if license and not LicenseResult(view_url, license).is_acceptable():
+                            logger.debug(
+                                "Not downloading article {} due to incompatible license: {}",
+                                view_url, license,
+                            )
+                            continue
+                        
+                        article_number = view_url.split('/')[-1]
+                        output_file = self.pdf_dir / journal / f"{article_number}.pdf"
                         record['local_pdf_file'] = output_file
                         tasks.append(self._download_pdf(
-                            record['pdf_url'],
+                            record['download_url'],
                             output_file,
                             download_session,
                             semaphore,
@@ -548,6 +671,8 @@ class VjolDownloader:
         logger.info("Starting paper harvesting.")
         self.download_api_urls()
         self.download_records_metadata()
+        asyncio.run(self.get_available_licenses())
+        # TODO: re-save self.records to each journal records file
         return asyncio.run(self.download_records_as_pdf())
 
     def compile_dataset(
@@ -616,9 +741,10 @@ def process_papers(processor: PaperProcessor, pdf_dir: Path) -> dict[Path, Path]
 def compile_and_load_vjol(
         downloader: VjolDownloader,
         pdf_to_md: dict[Path, Path],
+        dataset_dir: Path = OUT_DATASET_DIR,
         streaming: bool = True,
     ):
-    builder = downloader.compile_dataset(pdf_to_md, dataset_dir=OUT_DATASET_DIR)
+    builder = downloader.compile_dataset(pdf_to_md, dataset_dir=dataset_dir)
     if streaming:
         return builder.as_streaming_dataset(split='train')
     else:
@@ -655,7 +781,6 @@ def main(
         base_url=VJOL_BASE_URL,
         pdf_dir=pdf_dir,
         records_dir=records_dir,
-        dataset_dir=out_dataset_dir,
         simultaneous_downloads=simultaneous_downloads,
         user_agent=user_agent,
         force_refresh_records=force_refresh_records,
@@ -672,4 +797,3 @@ def main(
 
 if __name__ == '__main__':
     app()
-    
