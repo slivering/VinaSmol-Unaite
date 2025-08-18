@@ -8,6 +8,9 @@ from datatrove.utils.text import Languages
 import pypandoc
 from vinasmol.hfmodel import LUCIE, SMOLLM2
 
+
+PLACEHOLDER_URL_PREFIX = "https://huggingface.co/placeholder-dataset-url"
+
 def filter_keys(d: dict, keys: list[str]) -> dict:
     return {k: d[k] for k in keys}
 
@@ -506,7 +509,8 @@ class NormalizeCols:
             id=DatasetNames.bkai_news_corpus.generate_row_id(),
             text=row['text'],
             metadata=dict(
-                url=row['link'],
+                # NOTE: this is an internal URL of the corpus. Only used for URLFilter to accept
+                url=f"{PLACEHOLDER_URL_PREFIX}/bkai-foundation-models/BKAINewsCorpus{row['link']}",
                 date=parse_publication_date(row['publish']).strftime("%Y-%m-%dT%H:%M:%S%z"),
                 **DatasetNames.bkai_news_corpus.origin_metadata(row['id'])
             )
@@ -518,6 +522,7 @@ class NormalizeCols:
             id=DatasetNames.vbpl.generate_row_id(),
             text=row['markdown_content'],
             metadata=dict(
+                url=row['url'],
                 title=row["Tiêu đề"],
                 scope=row["Phạm vi"],
                 industry=row["Ngành"],
@@ -530,8 +535,11 @@ class NormalizeCols:
 
     @staticmethod
     def mtet(row: dict) -> dict:
+        id = DatasetNames.mtet.generate_row_id()
         return dict(
-            id=DatasetNames.mtet.generate_row_id(),
+            id=id,
+            # NOTE: this is an fake internal URL for mTet. Only used for URLFilter to accept
+            url=f"{PLACEHOLDER_URL_PREFIX}/phongmt184172/mtet/{id}",
             text=NormalizeCols.format_prompt_response(row['prompt'], row['response']),
             metadata=DatasetNames.mtet.origin_metadata(),
         )

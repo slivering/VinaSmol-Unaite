@@ -199,6 +199,7 @@ def download_vietnamese_datasets(data_dir: Path):
     )
 
     # 800 MB, 8M rows
+    # Can slightly overlap with vbpl and vjol
     mtet = load_dataset("phongmt184172/mtet", split="train")
     (mtet
         .map(NormalizeCols.mtet, remove_columns=mtet.column_names, num_proc=NUM_PROC)
