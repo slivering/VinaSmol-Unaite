@@ -1,0 +1,3 @@
+[submodule "vinasmol/training/dataset/deduplicate-text-datasets"]
+	path = vinasmol/training/dataset/deduplicate-text-datasets
+	url = https://github.com/google-research/deduplicate-text-datasets.git

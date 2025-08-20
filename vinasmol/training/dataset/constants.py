@@ -5,7 +5,16 @@ Constants for the Vietnamese language.
 import importlib
 import requests
 
+from diskcache import Cache
+from loguru import logger
+
+from . import DATA_DIR
+
+_cache = Cache(DATA_DIR / "vietnamese-words")
+
+@_cache.memoize(tag="vietnamese-stopwords")
 def download_vietnamese_stopwords(url: str) -> list[str]:
+    logger.info("Downloading Vietnamese stop words at {}", url)
     r = requests.get(url)
     return r.text.splitlines()
 
@@ -20,7 +29,9 @@ def compile_module(name: str, source: str):
     exec(source, module.__dict__)
     return module
 
+@_cache.memoize(tag="vietnamese-flagged-words")
 def download_vietnamese_flagged_words(url: str) -> list[str]:
+    logger.info("Downloading Vietnamese flagged words from {}", url)
     r = requests.get(url)
     flagged_words = compile_module('flagged_words', r.text)
     return flagged_words.flagged_words['vi'] # noqa

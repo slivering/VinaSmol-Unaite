@@ -42,14 +42,16 @@ Refer to the [original paper](https://arxiv.org/abs/2402.14714v1) for more infor
 ### ReLoRA
 
 In order to pretrain the model on even more tokens with limited resources, [ReLoRA](https://arxiv.org/abs/2307.05695) is an interesting technique that drastically cuts down on the compute and memory requirements.
-Diff lora
 
 We can use ReLoRA during stages 6 and 7 of the multi-stage training, where the number of trainable parameters increases with the transformer layers.
 
 While ReLoRA may be unnecessary for very small LLMs such as [SmolLM2-360M](https://huggingface.co/HuggingFaceTB/SmolLM2-360M), such an approach would be crucial for training larger models such as [Lucie-7B](https://huggingface.co/OpenLLM-France/Lucie-7B-Instruct-v1.1).
 
-Implementation (not reviewed yet):
-https://github.com/ElleLeonne/Lightning-ReLoRA
+Implementations (not reviewed yet):
+- https://github.com/ElleLeonne/Lightning-ReLoRA
+- https://github.com/axolotl-ai-cloud/axolotl/blob/main/examples/llama-2/relora.yml
+
+How to integrate both EEVE and ReLoRA into existing training frameworks remains very unclear. Custom training code is very likely to be necessary, therefore a PyTorch Lightning-based solution could be more suitable for customization. Otherwise we should fork a training framework to add support for specific parameter freezing, if necessary.
 
 ### Hyperparameters
 

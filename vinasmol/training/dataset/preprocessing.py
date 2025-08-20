@@ -9,8 +9,6 @@ import pypandoc
 from vinasmol.hfmodel import LUCIE, SMOLLM2
 
 
-PLACEHOLDER_URL_PREFIX = "https://huggingface.co/placeholder-dataset-url"
-
 def filter_keys(d: dict, keys: list[str]) -> dict:
     return {k: d[k] for k in keys}
 
@@ -131,7 +129,7 @@ def format_vbpl_md(row: dict) -> dict:
 class DatasetNames(StrEnum):
     _ignore_ = [
         '_IDS', '_ID_COUNTERS', '_GLOBAL_ID_COUNTER', '_LOCK',
-        '_ENABLED', 'ENGLISH', 'VIETNAMESE', 'CODE',
+        '_ENABLED', 'ENGLISH', 'VIETNAMESE', 'CODE', 'PLACEHOLDER_URLS',
     ]
 
     # SmolLM corpus
@@ -172,7 +170,7 @@ class DatasetNames(StrEnum):
     ENGLISH = set()
     VIETNAMESE = set()
     CODE = set()
-
+    PLACEHOLDER_URLS: list[str] = []
 
     @classmethod
     def _init_cls_vars(cls):
@@ -229,6 +227,10 @@ class DatasetNames(StrEnum):
         cls.CODE = {
             cls.lucie_training_code,
         }
+        cls.PLACEHOLDER_URLS = [
+            name.placeholder_url
+            for name in cls.__members__.values()
+        ]
     
     @property
     def language(self) -> str:
@@ -287,6 +289,12 @@ class DatasetNames(StrEnum):
             # Appending the dataset id ensures consistency in case the global id is reset
             # e.g. when redownloading a dataset.
             return self._id + 1000 * DatasetNames._GLOBAL_ID_COUNTER
+    
+    @property
+    def placeholder_url(self) -> str:
+        """A placeholder URL prefix to use when the dataset has no web sources."""
+        return f"https://{self.name.replace('_', '-')}.example"
+
 
 DatasetNames._init_cls_vars()
 
@@ -315,11 +323,14 @@ class NormalizeCols:
     
     @staticmethod
     def cosmopedia_v2(row: dict) -> dict:
+        id = DatasetNames.cosmopedia_v2.generate_row_id()
         return dict(
-            id=DatasetNames.cosmopedia_v2.generate_row_id(),
+            id=id,
             # Don't include prompt
             text=row['text'],
             metadata=dict(
+                # Cosmopedia v2 is synthetic data generated from web sources
+                url=f"{DatasetNames.cosmopedia_v2.placeholder_url}/{id}"
                 **filter_keys(row, ['audience', 'format', 'seed_data']),
                 **DatasetNames.cosmopedia_v2.origin_metadata(),
             ),
@@ -392,6 +403,8 @@ class NormalizeCols:
             id=DatasetNames.olmocr_pes2o.generate_row_id(),
             text=format_olmocr_pes2o(row['text']),
             metadata=dict(
+                # This is not the source URL. No problem for URL filters.
+                url=f"https://api.semanticscholar.org/graph/v1/paper/{row['id']}"
                 **filter_keys(
                     remove_null_from_metadata(row['metadata']),
                     ['pdf-total-pages', 'fieldofstudy']
@@ -402,10 +415,13 @@ class NormalizeCols:
     
     @staticmethod
     def flan_v2(row: dict) -> dict:
+        id = DatasetNames.flan_v2.generate_row_id()
         return dict(
-            id=DatasetNames.flan_v2.generate_row_id(),
+            id=id,
             text=NormalizeCols.format_prompt_response(row['inputs'], row['targets']),
             metadata=dict(
+                # FLAN v2 is LLM-generated, so it has no real web source
+                url=f"{DatasetNames.flan_v2.placeholder_url}/{id}",
                 **filter_keys(
                     row,
                     ['task'],
@@ -434,6 +450,8 @@ class NormalizeCols:
             id=DatasetNames.mathpile_commercial.generate_row_id(),
             text=md_content,
             metadata=dict(
+                # TODO: find true URL
+                url=f"{DatasetNames.mathpile_commercial.placeholder_url}/{row['meta']['id']}",
                 **filter_keys(row, ['subset']),
                 **DatasetNames.mathpile_commercial.origin_metadata(row['meta']['id']),
             ),
@@ -445,6 +463,8 @@ class NormalizeCols:
             id=DatasetNames.claire_en.generate_row_id(),
             text=row['text'],
             metadata=dict(
+                # Transcripts of conversations. Not web content
+                url=f"{DatasetNames.claire_en.placeholder_url}/{row['id']['idx_row']}",
                 subset=row['extra']['subset'],
                 **DatasetNames.claire_en.origin_metadata(row['id']['idx_row']),
             ),
@@ -485,10 +505,15 @@ class NormalizeCols:
 
     @staticmethod
     def madlad400(row: dict) -> dict:
+        id = DatasetNames.madlad400.generate_row_id()
         return dict(
-            id=DatasetNames.madlad400.generate_row_id(),
+            id=id,
             text=row['text'],
-            metadata=DatasetNames.madlad400.origin_metadata(),
+            metadata=dict(
+                # Unfortunately, MADLAD-400 has not provided its exact sources
+                url=f"{DatasetNames.madlad400.placeholder_url}/{id}",
+                **DatasetNames.madlad400.origin_metadata()
+            ),
         )
 
     @staticmethod
@@ -510,7 +535,7 @@ class NormalizeCols:
             text=row['text'],
             metadata=dict(
                 # NOTE: this is an internal URL of the corpus. Only used for URLFilter to accept
-                url=f"{PLACEHOLDER_URL_PREFIX}/bkai-foundation-models/BKAINewsCorpus{row['link']}",
+                url=f"{DatasetNames.bkai_news_corpus.placeholder_url}{row['link']}",
                 date=parse_publication_date(row['publish']).strftime("%Y-%m-%dT%H:%M:%S%z"),
                 **DatasetNames.bkai_news_corpus.origin_metadata(row['id'])
             )
@@ -539,7 +564,7 @@ class NormalizeCols:
         return dict(
             id=id,
             # NOTE: this is an fake internal URL for mTet. Only used for URLFilter to accept
-            url=f"{PLACEHOLDER_URL_PREFIX}/phongmt184172/mtet/{id}",
+            url=f"{DatasetNames.mtet.placeholder_url}/{id}",
             text=NormalizeCols.format_prompt_response(row['prompt'], row['response']),
             metadata=DatasetNames.mtet.origin_metadata(),
         )

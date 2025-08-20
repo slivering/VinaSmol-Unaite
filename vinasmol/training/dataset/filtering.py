@@ -1,6 +1,5 @@
 import re
 
-# TODO: use Slurm when scaling becomes necessary
 from datatrove.executor.local import LocalPipelineExecutor
 
 from datatrove.data import Document
@@ -14,30 +13,65 @@ from datatrove.pipeline.filters import (
     LanguageFilter,
     URLFilter,
 )
-from datatrove.pipeline.dedup import ESDatasetToSequence, ESMergeSequences, ESRangeRemover
+from datatrove.pipeline.stats import (
+    DocStats, LineStats, ParagraphStats,
+    WordStats, SentenceStats, TokenStats, 
+    #CCNetPerplexityStats,
+    TopKConfig,
+)
+#from datatrove.pipeline.dedup import ESDatasetToSequence, ESMergeSequences, ESRangeRemover
 from datatrove.pipeline.formatters import PIIFormatter
 from datatrove.pipeline.readers.jsonl import JsonlReader
 from datatrove.pipeline.readers.parquet import ParquetReader
-from datatrove.pipeline.tokens import TokensCounter
 from datatrove.pipeline.writers.jsonl import JsonlWriter
 from datatrove.utils.text import Languages
 
-from ...hfmodel import SEA_LION_BERT
+from vinasmol.training.dataset.preprocessing import DatasetNames
+
+from ...hfmodel import SAILOR_2_8B
 from . import DATA_DIR, DATA_DIR_VI
 from .constants import (
     STOP_WORDS,
     FLAGGED_WORDS_SAILCRAFT,
 )
-from .deduplication import RensaBuildIndex, RensaDeduplicate
+#from .deduplication import ESComputeRangesExternal, RensaBuildIndex, RensaDeduplicate
 from .normalization import Formatter
 
-VIETNAMESE_TOKENIZER = SEA_LION_BERT.tokenizer
+VIETNAMESE_TOKENIZER = SAILOR_2_8B.tokenizer
 
+top_k_config = TopKConfig(top_k_groups=["fqdn"], top_k=10_000)
+
+MAIN_OUTPUT_DIR = DATA_DIR
 FILTERING_OUTPUT_DIR = (DATA_DIR / "filtering").resolve()
 ES_DIR = DATA_DIR / "es"
-MAIN_OUTPUT_DIR = DATA_DIR
+STATS_DIR = DATA_DIR / "stats"
+
 DUMP_TO_PROCESS = "vi-all"
 SEED = 20250801
+
+
+class URLFilterWithWhitelist(URLFilter):
+    """Perform filtering on URLs, whith a domain whitelist."""
+
+    name = "😈 Url-filter (with 📋 whitelist)"
+
+    def __init__(self, domain_whitelist: list[str] = None, **kwargs):
+        super().__init__(**kwargs)
+        self.domain_whitelist = domain_whitelist
+        # TODO: allow domain suffix wildcard
+    
+    def filter(self, document: Document):
+        url = document.metadata.get("url")
+        if not url:
+            # Accept sources which have no URL by design
+            return True
+
+        url_info = self.tldextractor(url)
+        if url_info.top_domain_under_public_suffix in self.domain_whitelist:
+            return True
+
+        return super().filter(document)
+
 
 class FlaggedWordsThresholdFilter(C4BadWordsFilter):
     """Filter documents that contain too many flagged words.
@@ -45,7 +79,7 @@ class FlaggedWordsThresholdFilter(C4BadWordsFilter):
     Contrary to the C4 one, this filter tolerates a proportion of flagged words.
     """
 
-    name = "⛰ Flagged Words Threshold"
+    name = "🚩 Flagged Words Threshold"
 
     def __init__(
         self,
@@ -102,49 +136,68 @@ class FlaggedWordsThresholdFilter(C4BadWordsFilter):
 
 output_intermediate_1 = f"{FILTERING_OUTPUT_DIR}/output_1/{DUMP_TO_PROCESS}"
 output_intermediate_2 = f"{FILTERING_OUTPUT_DIR}/output_2/{DUMP_TO_PROCESS}"
-output_intermediate_3 = f"{FILTERING_OUTPUT_DIR}/output_3/{DUMP_TO_PROCESS}"
-output_intermediate_4 = f"{FILTERING_OUTPUT_DIR}/output_4/{DUMP_TO_PROCESS}"
 es_dir_vi = f"{ES_DIR}/{DUMP_TO_PROCESS}"
 
 main_processing_executor = LocalPipelineExecutor(
     pipeline=[
         ParquetReader(
             str(DATA_DIR_VI),
+            limit=100_000, # TODO: remove, for debugging
             default_metadata={"dump": DUMP_TO_PROCESS},
         ),
         # URL filtering for malicious, toxic and adult websites
         # Mainly for CulturaX, MADLAD-400 (FIXME: no source for the latter...)
-        # The default list includes 361 / 4510795 .vn websites, which is fairly incomplete
+        # The default list includes 361 .vn / 4510795 banned websites, which is fairly incomplete
         # CulturaX has already undergone such filtering. Possibly remove MADLAD-400
         # TODO: add domain and word additional lists
         # TODO: ignore absent URL fields
-        URLFilter(
+        URLFilterWithWhitelist(
+            # TODO: add other domains if useful
+            domain_whitelist=["wikipedia.org"] + DatasetNames.PLACEHOLDER_URLS,
             extra_domains=None,
             extra_urls=None,
             exclusion_writer=JsonlWriter(f"{FILTERING_OUTPUT_DIR}/removed/1_url/{DUMP_TO_PROCESS}"),
         ),
-        Formatter(),
+        Formatter(
+            strip_whitespace=False, # TODO: only False for code and code excerpts
+            normalize_punctuation=False,
+        ),
         LanguageFilter(
-            Languages.vietnamese,
+            # It's okay to have English data in the corpus if it's about Vietnam.
+            # Since it's a minority, it won't affect much of the proportions.
+            # However, for consistency with the next filters, we restrict to only one language
+            # FIXME: we may have to extract mtet from the dataset because it will be flagged
+            # as English. Same for some subsets of VJOL
+            # TODO: extract three subsets: English, Vietnamese, parallel
+            # FIXME: too many false positives
+            [Languages.vietnamese],
             language_threshold=0.65,
             backend="ft176",
             exclusion_writer=JsonlWriter(
-                f"{FILTERING_OUTPUT_DIR}/2_non_english/",
+                f"{FILTERING_OUTPUT_DIR}/2_non_vietnamese/",
                 output_filename="${language}/" + DUMP_TO_PROCESS + "/${rank}.jsonl.gz",
             ),
         ),
 
         # FIXME: unfortunately there's a lot of redundant work due to repeated tokenization
+        # TODO: cache token spans
 
         GopherRepetitionFilter(
+            # default parameters
+            dup_line_frac=0.3,
+            dup_para_frac=0.3,
+            dup_line_char_frac=0.2,
+            dup_para_char_frac=0.2,
+            top_n_grams=((2, 0.2), (3, 0.18), (4, 0.16)),
+            dup_n_grams=((5, 0.15), (6, 0.14), (7, 0.13), (8, 0.12), (9, 0.11), (10, 0.1)),
             language=Languages.vietnamese,
             # TODO: audit removed samples due to ngram filters
             # Poems might be affected and coefficients might be different for Vietnamese
             exclusion_writer=JsonlWriter(f"{FILTERING_OUTPUT_DIR}/removed/3_gopher_rep/{DUMP_TO_PROCESS}"),
         ),
         GopherQualityFilter(
-            min_doc_words=100, # Tokens counted by spaCy's Vietnamese tokenizer 
-            max_doc_words=300_000, # TODO: audit for bias against long, high-quality documents
+            min_doc_words=50, # Tokens counted by spaCy's Vietnamese tokenizer 
+            max_doc_words=200_000, # Around 50 PDF pages
             min_avg_word_length=2,
             max_avg_word_length=10, # High for mixed language document (e.g. parallel translation)
             max_bullet_lines_ratio=0.9,
@@ -157,15 +210,18 @@ main_processing_executor = LocalPipelineExecutor(
         C4QualityFilter(
             filter_no_terminal_punct=False,
             min_num_sentences=3,
-            min_words_per_line=1,
+            #min_words_per_line=1,
             # FIXME: filter=True ?? would that hurt understanding of programming blogs?
             filter_javascript=False,
             filter_curly_bracket=False,
+            filter_policy=True,
+            remove_citations=True,
             language=Languages.vietnamese,
             exclusion_writer=JsonlWriter(f"{FILTERING_OUTPUT_DIR}/removed/5_c4/{DUMP_TO_PROCESS}"),
         ),
         FineWebQualityFilter(
-            line_punct_thr=0.1, # TODO: audit for bias
+            # Keep the lower bound low in order to tolerate many newlines in paragraph formatting
+            line_punct_thr=0.1,
             line_punct_exclude_zero=False,
             short_line_thr=0.67,
             short_line_length=20, # TODO: audit for bias (e.g. poem exclusion)
@@ -186,84 +242,148 @@ main_processing_executor = LocalPipelineExecutor(
 
         # Other filters: FastTextClassifierFilter (probably biased), SamplerFilter
 
+        # TODO: add Decontamination filters from datatrove (requires lighteval)
+
         JsonlWriter(output_intermediate_1),
     ],
+    # TODO: increase when we're not testing anymore
     tasks=64,
     workers=16,
     logging_dir=f"{MAIN_OUTPUT_DIR}/logs/base_processing/{DUMP_TO_PROCESS}",
 )
 
 
-rensa_index = RensaBuildIndex(
-    num_perm=128,
-    seed=SEED,
-    lsh_threshold=0.8,
-    num_bands=16,
-    final_jaccard_threshold=0.85,
-)
+#rensa_index = RensaBuildIndex(
+#    num_perm=128,
+#    seed=SEED,
+#    lsh_threshold=0.8,
+#    num_bands=16,
+#    final_jaccard_threshold=0.85,
+#)
 
 document_dedup_stage = LocalPipelineExecutor(
     pipeline=[
         JsonlReader(output_intermediate_1),
-        rensa_index,
-        RensaDeduplicate(
-            rensa_index=rensa_index,
-            exclusion_writer=JsonlWriter(f"{FILTERING_OUTPUT_DIR}/removed/8_dedup/{DUMP_TO_PROCESS}")
-        ),
+        # FIXME: weird bug in garbage collection between pyo3 and multiprocessing
+        #rensa_index,
+        #RensaDeduplicate(
+        #    rensa_index=rensa_index,
+        #    exclusion_writer=JsonlWriter(f"{FILTERING_OUTPUT_DIR}/removed/8_dedup/{DUMP_TO_PROCESS}")
+        #),
         JsonlWriter(output_intermediate_2),
     ],
     logging_dir=f"{MAIN_OUTPUT_DIR}/logs/minhash/{DUMP_TO_PROCESS}",
     depends=main_processing_executor,
 )
 
-sentence_dedup_stage_1 = LocalPipelineExecutor(
+tasks_sequence_dedup = 64
+
+sequence_dedup_stage_1 = LocalPipelineExecutor(
     pipeline=[
         JsonlReader(output_intermediate_2),
-        ESDatasetToSequence(output_folder=es_dir_vi),
-        JsonlWriter(output_intermediate_3),
+        #ESDatasetToSequence(
+        #    output_folder=es_dir_vi,
+        #    tokenizer_name_or_path=VIETNAMESE_TOKENIZER,
+        #),
     ],
-    workers=4,
-    tasks=4,
+    workers=16,
+    tasks=tasks_sequence_dedup,
     logging_dir=f"{MAIN_OUTPUT_DIR}/logs/es/1/{DUMP_TO_PROCESS}",
-    depends=main_processing_executor,
+    depends=document_dedup_stage,
 )
 
-sentence_dedup_stage_2 = LocalPipelineExecutor(
+sequence_dedup_stage_2 = LocalPipelineExecutor(
     pipeline=[
-        JsonlReader(output_intermediate_3),
-        ESMergeSequences(
-            data_folder=es_dir_vi,
-            tasks_stage_1=4,
-        ),
-        JsonlWriter(output_intermediate_4),
+        #ESMergeSequences(
+        #    data_folder=es_dir_vi,
+        #    tasks_stage_1=tasks_sequence_dedup,
+        #),
     ],
     logging_dir=f"{MAIN_OUTPUT_DIR}/logs/es/2/{DUMP_TO_PROCESS}",
-    depends=main_processing_executor,
+    depends=sequence_dedup_stage_1,
+)
+
+external_dedup_stage_3 = LocalPipelineExecutor(
+    pipeline=[
+        #ESComputeRangesExternal(
+        #    length_threshold=100,
+        #    data_folder=es_dir_vi,
+        #    num_threads=16,
+        #),
+    ],
+    workers=1,
+    logging_dir=f"{MAIN_OUTPUT_DIR}/logs/es/2/{DUMP_TO_PROCESS}",
+    depends=sequence_dedup_stage_2,
+    skip_completed=True #hangs the pipeline
 )
 
 final_stage = LocalPipelineExecutor(
     pipeline=[
-        JsonlReader(output_intermediate_4),
-        ESRangeRemover(
-            min_doc_words=50,
-            sequence_folder=es_dir_vi,
+        JsonlReader(output_intermediate_2),
+        #ESRangeRemover(
+        #    min_doc_words=50,
+        #    sequence_folder=es_dir_vi,
+        #    tokenizer_name_or_path=VIETNAMESE_TOKENIZER,
+        #    language=Languages.vietnamese,
+        #),
+        DocStats(
+            f"{STATS_DIR}/docs",
+            top_k_config=top_k_config,
         ),
-        TokensCounter(VIETNAMESE_TOKENIZER),
-
-        # TODO: (here) check final URL distribution
+        LineStats(
+            f"{STATS_DIR}/lines",
+            top_k_config=top_k_config,
+        ),
+        ParagraphStats(
+            f"{STATS_DIR}/paragraphs",
+            top_k_config=top_k_config,
+        ),
+        # Not very meaningful to compute word length (includes spaces!).
+        # TODO: count syllables
+        WordStats(
+            f"{STATS_DIR}/words",
+            stop_words=STOP_WORDS,
+            language=Languages.vietnamese,
+            top_k_config=top_k_config,
+        ),
+        SentenceStats(
+            f"{STATS_DIR}/sentences",
+            language=Languages.vietnamese,
+            top_k_config=top_k_config,
+        ),
+        TokenStats(
+            f"{STATS_DIR}/tokens",
+            tokenizer_name_or_path=VIETNAMESE_TOKENIZER,
+            top_k_config=top_k_config,
+        ),
+        # Expensive, disabled
+        #CCNetPerplexityStats(
+        #    f"{STATS_DIR}/perplexity",
+        #    model_dataset="oscar", # https://huggingface.co/edugp/kenlm/tree/main
+        #    language=Languages.vietnamese,
+        #    top_k_config=top_k_config,
+        #),
 
         # FIXME: performance/security issues?
         # Possibly use scrubadub for more in-depth cleaning (beware of performance)
         PIIFormatter(),
         JsonlWriter(f"{MAIN_OUTPUT_DIR}/{DUMP_TO_PROCESS}/deduped"),
     ],
+    tasks=64,
+    workers=16,
     logging_dir=f"{MAIN_OUTPUT_DIR}/logs/es/3/{DUMP_TO_PROCESS}",
-    depends=main_processing_executor,
+    depends=external_dedup_stage_3,
 )
 
 
-if __name__ == "__main__":
-    main_processing_executor.run()
-    final_stage.run()
-    
 
+def main():
+    main_processing_executor.run()
+    document_dedup_stage.run()
+    sequence_dedup_stage_1.run()
+    sequence_dedup_stage_2.run()
+    external_dedup_stage_3.run()
+    final_stage.run()
+
+if __name__ == "__main__":
+    main()
