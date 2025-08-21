@@ -26,6 +26,7 @@ dependencies = [
     "sentencepiece",
     "spacy",
     "sickle",
+    "tiktoken",
     "torch",
     "transformers",
     "typer",

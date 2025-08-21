@@ -1,0 +1,9 @@
+
+
+
+LATN_UPPERCASE = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+LATN_LOWERCASE = LATN_UPPERCASE.lower()
+VI_UPPERCASE = "ÀÁÂÃÈÉÊÌÍÒÓÔÕÙÚÝĂĐĨŨƠƯẠẢẤẦẨẪẬẮẰẲẴẶẸẺẼẾỀỂỄỆỈỊỌỎỐỒỔỖỘỚỜỞỠỢỤỦỨỪỬỮỰỲỴỶỸ"
+VI_LOWERCASE = VI_UPPERCASE.lower()
+
+LETTERS = list(LATN_LOWERCASE + LATN_UPPERCASE + VI_LOWERCASE + VI_UPPERCASE)

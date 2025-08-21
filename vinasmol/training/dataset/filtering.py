@@ -416,6 +416,7 @@ final_stage = LocalPipelineExecutor(
         # Possibly use scrubadub for more in-depth cleaning (beware of performance)
         PIIFormatter(),
         JsonlWriter(f"{MAIN_OUTPUT_DIR}/{DUMP_TO_PROCESS}/deduped"),
+        # TODO: shard and shuffle each of them
     ],
     tasks=tasks_sequence_dedup,
     workers=tasks_sequence_dedup,

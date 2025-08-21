@@ -1,5 +1,29 @@
 # Tokenization
 
+## Get started
+
+### Prerequisites
+
+The Vietnamese datasets need to have been preprocessed, filtered and deduplicated. Follow the steps [here](../training/dataset/README.md).
+
+### Extend SmolLM's vocabulary with Vietnamese
+
+```bash
+python -m vinasmol.tokenization.training \
+    vinasmol/training/dataset/data/deduped/ \
+    --tokenizer-out-dir vinasmol/tokenization/data \
+    --vietnamese-vocab-size 10000
+```
+
+The merged tokenizer and the SmolLM weights with extended vocabulary can be found in the
+directory specified by `--tokenizer-out-dir`.
+
+> [!NOTE] Terminology
+> We refer as *new* the tokenizer trained anew on Vietnamese corpora, with of vocabulary size specified by `--vietnamese-vocab-size`.
+> We refer as *merged* the tokenizer with the previous English vocabulary and the added Vietnamese vocabulary from the *new* tokenizer. The number of added tokens is **lower** than `--vietnamese-vocab-size`.
+
+---
+
 ## Rationale
 
 SmolLM is a monolingual trained on English. Therefore, it has no Vietnamese tokens (see [this Jupyter notebook](./language_exploration_smollm.ipynb) for experiments and results visualization).
@@ -9,6 +33,12 @@ Adapting the base tokenizer for Vietnamese yields the following improvements:
 2. A language-specific tokenizer improves language understanding and task accuracy ([arXiv](https://arxiv.org/abs/2502.12560v2)).
 
 ## Recipe
+
+The SmolLM tokenizer is trained on English with a vocabulary size of 49152 and a window size of 8192.
+
+```python
+special_tokens={'bos_token': '<|endoftext|>', 'eos_token': '<|endoftext|>', 'unk_token': '<|endoftext|>', 'additional_special_tokens': ['<|endoftext|>', '<|im_start|>', '<|im_end|>', '<repo_name>', '<reponame>', '<file_sep>', '<filename>', '<gh_stars>', '<issue_start>', '<issue_comment>', '<issue_closed>', '<jupyter_start>', '<jupyter_text>', '<jupyter_code>', '<jupyter_output>', '<jupyter_script>', '<empty_output>']}
+```
 
 We train a new tokenizer on a subset of our training Vietnamese corpora ([details](../training/dataset/README.md)). We add about 10000 new tokens to the base tokenizer, filter rare tokens and add accentuated letters if not present.
 
