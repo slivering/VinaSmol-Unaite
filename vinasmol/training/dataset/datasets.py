@@ -1,21 +1,58 @@
-from datasets import enable_progress_bars, load_dataset
 from pathlib import Path
 
+from datasets import Dataset, enable_progress_bars, load_dataset
+
 from ...hfmodel import BASE_MODEL, SMOLLM2, LUCIE
+from . import DATA_DIR, DATA_DIR_EN, DATA_DIR_VI
 from .preprocessing import (
     format_vbpl_md, convert_mediawiki_to_md, NormalizeCols,
 )
-
-DATA_DIR = (Path(__file__).parent / "data").resolve()
-DATA_DIR_EN = DATA_DIR / "english"
-DATA_DIR_VI = DATA_DIR / "vietnamese"
 
 LOAD_KWARGS = dict(split="train", streaming=True)
 # TODO: download the sampled subset as a Dataset and then map in parallel
 NUM_PROC = 16
 SEED = 20250801
+SHARD_SIZE = 100_000_000
 
 MIN_PYTHON_EDU_SCORE = 3
+
+def estimate_dataset_size(dataset: Dataset, text_column: str = 'text') -> int:
+    """Estimate the number of bytes to store the text column as compressed Parquet."""
+    return int(0.5 * sum(map(len, dataset[text_column])))
+
+def to_sharded_parquet(
+        dataset: Dataset,
+        dir: str | Path,
+        shard_size_bytes: int = SHARD_SIZE,
+    ) -> list[Path]:
+    """Save a dataset sharded into Parquet files.
+
+    Args:
+        dataset (Dataset): The dataset.
+        dir (Path): The directory to write the Parquet files.
+        shard_size_bytes (int, optional): The approximate number of bytes for each shard.
+            Defaults to `SHARD_SIZE`.
+
+    Returns:
+        files (list[Path]): The list of shards paths.
+    """
+    dir = Path(dir)
+    dir.mkdir(parents=True, exist_ok=True)
+    num_shards = max(1, estimate_dataset_size(dataset) // shard_size_bytes)
+
+    files = []
+    for i in range(num_shards):
+        shard = dataset.shard(num_shards, i, keep_in_memory=True)
+        file = dir / f"part-{i:04}.parquet"
+        shard.to_parquet(file)
+        files.append(file)
+    return files
+
+def load_sharded_parquet(name: str, data_dir: str | Path = DATA_DIR) -> Dataset:
+    data_dir = Path(data_dir)
+    parquet_files = [str(f) for f in data_dir.glob(f"**/{name}/*.parquet")]
+    return load_dataset('parquet', split='train', data_files=parquet_files)
+
 
 # FIXME: datasets shards are too large and target data is smaller than one shard
 # TODO: possibly perform map after shuffle/take/Dataset.from_generator?
@@ -24,21 +61,21 @@ def download_english_datasets(data_dir: Path):
     if BASE_MODEL == SMOLLM2:
         # 28B tokens, 39M rows
         cosmopedia_v2 = load_dataset("HuggingFaceTB/smollm-corpus", "cosmopedia-v2", **LOAD_KWARGS)
-        (cosmopedia_v2
+        cosmopedia_v2 = (cosmopedia_v2
             .map(NormalizeCols.cosmopedia_v2, remove_columns=cosmopedia_v2.column_names)
             .shuffle(seed=SEED, buffer_size=1000)
             .take(1_000_000)
-            .to_parquet(data_dir / "cosmopedia_v2.parquet")
         )
+        to_sharded_parquet(cosmopedia_v2, data_dir / "cosmopedia_v2")
 
         # ~400 GB, 190M rows
         fineweb_edu_dedup = load_dataset("HuggingFaceTB/smollm-corpus", "fineweb-edu-dedup", **LOAD_KWARGS)
-        (fineweb_edu_dedup
+        fineweb_edu_dedup = (fineweb_edu_dedup
             .map(NormalizeCols.fineweb_edu_dedup, remove_columns=fineweb_edu_dedup.column_names)
             .shuffle(seed=SEED, buffer_size=5_000)
             .take(1_000_000)
-            .to_parquet(data_dir / "fineweb_edu.parquet")
         )
+        to_sharded_parquet(fineweb_edu_dedup, data_dir / "fineweb_edu")
 
         # 5 GB, 3M rows
         # Alternative: "meryyllebr543/stack-edu-huggingface", "python" (25M rows), one shard
@@ -54,13 +91,13 @@ def download_english_datasets(data_dir: Path):
                 'edu_score',
             ]
         )
-        (starcoder_python_edu
+        starcoder_python_edu = (starcoder_python_edu
             .filter(lambda row: round(row['edu_score']) >= MIN_PYTHON_EDU_SCORE)
             .map(NormalizeCols.starcoder_python_edu, remove_columns=starcoder_python_edu.column_names)
             .shuffle(seed=SEED, buffer_size=5_000)
             .take(500_000)
-            .to_parquet(data_dir / "starcoder_python_edu.parquet")
         )
+        to_sharded_parquet(starcoder_python_edu, data_dir / "starcoder_python_edu")
 
         #lucie_python = load_dataset("OpenLLM-France/Lucie-Training-Dataset", "code-python", revision="v1.2", split='train', streaming=True)
         
@@ -68,22 +105,22 @@ def download_english_datasets(data_dir: Path):
 
         # 27 GB, 6M rows
         openwebmath = load_dataset("open-web-math/open-web-math", **LOAD_KWARGS)
-        (openwebmath
+        openwebmath = (openwebmath
             .map(NormalizeCols.open_web_math, remove_columns=openwebmath.column_names)
             .shuffle(seed=SEED, buffer_size=1000)
             .take(100_000)
-            .to_parquet(data_dir / "openwebmath.parquet")
         )
+        to_sharded_parquet(openwebmath, data_dir / "openwebmath")
 
         # 42B tokens, 40M rows
         # Higher-quality and up-to-date pes2o dataset with proper formatting
         olmocr_pes2o = load_dataset("allenai/olmOCR-pes2o-0225", **LOAD_KWARGS)
-        (olmocr_pes2o
+        olmocr_pes2o = (olmocr_pes2o
             .map(NormalizeCols.olmocr_pes2o, remove_columns=olmocr_pes2o.column_names)
             .shuffle(seed=SEED, buffer_size=1000)
             .take(500_000)
-            .to_parquet(data_dir / "pes2o.parquet")
         )
+        to_sharded_parquet(olmocr_pes2o, data_dir / "olmocr_pes2o")
 
         # TODO: CLI download as per HuggingFace documentation
         # 10B tokens, 900M rows
@@ -98,11 +135,11 @@ def download_english_datasets(data_dir: Path):
 
         # ~200MB, 200k rows
         stackmathqa = load_dataset("math-ai/StackMathQA", "stackmathqa200k", split="train")
-        (stackmathqa
+        stackmathqa = (stackmathqa
             .map(NormalizeCols.stackmathqa, remove_columns=stackmathqa.column_names)
             .shuffle(seed=SEED)
-            .to_parquet(data_dir / "stackmathqa.parquet")
         )
+        to_sharded_parquet(stackmathqa, data_dir / "stackmathqa")
 
         # ~400GB, ~300M rows
         # Temporarily excluded because of the large download
@@ -116,13 +153,13 @@ def download_english_datasets(data_dir: Path):
 
         # ~20GB, 7.03M rows
         wikipedia_en = load_dataset("omarkamali/wikipedia-monthly", "20250702.en", **LOAD_KWARGS)
-        (wikipedia_en
+        wikipedia_en = (wikipedia_en
             .map(convert_mediawiki_to_md, fn_kwargs=dict(lang='en'))
             .map(NormalizeCols.wikipedia_en, remove_columns=wikipedia_en.column_names)
             .shuffle(seed=SEED, buffer_size=5_000)
             .take(1_000_000)
-            .to_parquet(data_dir / "wikipedia_en.parquet")
         )
+        to_sharded_parquet(wikipedia_en, data_dir / "wikipedia_en")
 
         # Datasets used in the pretraining phase of Lucie (mostly orthogonal with SmolLM-Corpus)
 
@@ -152,40 +189,40 @@ def download_english_datasets(data_dir: Path):
 def download_vietnamese_datasets(data_dir: Path):
     # ~ 1 GB, 1.3M rows
     wikipedia_vi = load_dataset("omarkamali/wikipedia-monthly", "20250702.vi", split="train")
-    (wikipedia_vi
+    wikipedia_vi = (wikipedia_vi
         .map(convert_mediawiki_to_md, fn_kwargs=dict(lang='vi'))
         .map(NormalizeCols.wikipedia_vi, remove_columns=wikipedia_vi.column_names, num_proc=NUM_PROC)
         .shuffle(seed=SEED)
-        .to_parquet(data_dir / "wikipedia_vi.parquet")
     )
+    to_sharded_parquet(wikipedia_vi, data_dir / "wikipedia_vi")
 
-    # 59 GB, 4M rows
+    # 59 GB (uncompressed?), 4M rows
     fineweb2_hq = load_dataset("epfml/FineWeb2-HQ", "vie_Latn", **LOAD_KWARGS)
-    (fineweb2_hq
+    fineweb2_hq = (fineweb2_hq
         .map(NormalizeCols.fineweb2_hq, remove_columns=fineweb2_hq.column_names)
         .shuffle(seed=SEED, buffer_size=1000)
-        .take(200_000)
-        .to_parquet(data_dir / "fineweb2_hq.parquet")
+        .take(1_000_000)
     )
+    to_sharded_parquet(fineweb2_hq, data_dir / "fineweb2_hq")
 
     # 55 B tokens, 58M rows
     # Possibly add https://huggingface.co/datasets/ontocord/CulturaY (data from Internet Archive)
-    culturax = load_dataset("uonlp/CulturaX", "vi", token=True, **LOAD_KWARGS)
-    (culturax
-        .map(NormalizeCols.culturax, remove_columns=culturax.column_names)
+    cultura_x = load_dataset("uonlp/CulturaX", "vi", token=True, **LOAD_KWARGS)
+    cultura_x = (cultura_x
+        .map(NormalizeCols.culturax, remove_columns=cultura_x.column_names)
         .shuffle(seed=SEED, buffer_size=10_000)
         .take(1_000_000)
-        .to_parquet(data_dir / "cultura_x.parquet")
     )
+    to_sharded_parquet(cultura_x, data_dir / "cultura_x")
 
     # 49 B tokens, 93M rows
     madlad400 = load_dataset("Symato/madlad-400_vi", split="train", streaming=True)
-    (madlad400
+    madlad400 = (madlad400
         .map(NormalizeCols.madlad400, remove_columns=madlad400.column_names)
         .shuffle(seed=SEED, buffer_size=10_000)
         .take(1_000_000)
-        .to_parquet(data_dir / "madlad_400.parquet")
     )
+    to_sharded_parquet(madlad400, data_dir / "madlad400")
 
     # 29 GB, 17M rows
     # Apache license for binhvq but underlying copyright unclear
@@ -195,17 +232,17 @@ def download_vietnamese_datasets(data_dir: Path):
         .map(NormalizeCols.bkai_news, remove_columns=bkai_news.column_names)
         .shuffle(seed=SEED, buffer_size=10_000)
         .take(1_000_000)
-        .to_parquet(data_dir / "bkai_news_corpus.parquet")
     )
+    to_sharded_parquet(bkai_news, data_dir / "bkai_news")
 
     # 800 MB, 8M rows
     # Can slightly overlap with vbpl and vjol
     mtet = load_dataset("phongmt184172/mtet", split="train")
-    (mtet
+    mtet = (mtet
         .map(NormalizeCols.mtet, remove_columns=mtet.column_names, num_proc=NUM_PROC)
         .shuffle(seed=SEED)
-        .to_parquet(data_dir / "mtet.parquet")
     )
+    to_sharded_parquet(mtet, data_dir / "mtet")
 
     # Muennighoff/flores200
     # ~ 100k words
@@ -216,12 +253,12 @@ def download_vietnamese_datasets(data_dir: Path):
     # ~ 300 MB, 62k rows, mostly clean
     # Don't use streaming mode in order to avoid Arrow column type inference errors
     vbpl = load_dataset("doanhieung/vbpl", split="train")
-    (vbpl
+    vbpl = (vbpl
         .map(format_vbpl_md, num_proc=NUM_PROC)
         .map(NormalizeCols.vbpl, remove_columns=vbpl.column_names)
         .shuffle(seed=SEED)
-        .to_parquet(data_dir / "vbpl.parquet")
     )
+    to_sharded_parquet(vbpl, data_dir / "vbpl")
 
 
 if __name__ == "__main__":
