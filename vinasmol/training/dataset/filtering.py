@@ -42,10 +42,11 @@ VIETNAMESE_TOKENIZER = SAILOR_2_8B.tokenizer
 top_k_config = TopKConfig(top_k_groups=["fqdn"], top_k=10_000)
 
 MAIN_OUTPUT_DIR = DATA_DIR
-FILTERING_OUTPUT_DIR = (DATA_DIR / "filtering").resolve()
+FILTERING_OUTPUT_DIR = (MAIN_OUTPUT_DIR / "filtering").resolve()
 FILTERING_REMOVED_DIR = (FILTERING_OUTPUT_DIR / "removed").resolve()
-ES_DIR = DATA_DIR / "es"
-STATS_DIR = DATA_DIR / "stats"
+ES_DIR = MAIN_OUTPUT_DIR / "es"
+LOGGING_DIR = MAIN_OUTPUT_DIR / "logs"
+STATS_DIR = MAIN_OUTPUT_DIR / "stats"
 
 DUMP_TO_PROCESS = "vi-all"
 SEED = 20250801
@@ -80,6 +81,8 @@ class URLFilterWithWhitelist(URLFilter):
         return super().filter(document)
 
 
+DEFAULT_SCORE = 3
+
 class FlaggedWordsThresholdFilter(C4BadWordsFilter):
     """Filter documents that contain too many flagged words.
     
@@ -91,7 +94,7 @@ class FlaggedWordsThresholdFilter(C4BadWordsFilter):
     def __init__(
         self,
         language: str,
-        language_flagged_words_override: list[str] = None,
+        language_flagged_words_override: list[str] | dict[str, int] = None,
         flagged_thr: float = 0.1,
         keep_fraction: float = 0.1,
         seed: int = None,
@@ -101,7 +104,7 @@ class FlaggedWordsThresholdFilter(C4BadWordsFilter):
 
         Args:
             language (str): the default language for the badwords filter.
-            language_flagged_words_override (list[str], optional):
+            language_flagged_words_override (list[str] | dict [str, int], optional):
                 Flagged words for the specified language.
             flagged_thr (float, optional): Maximum proportion of flagged words.
                 The ratio is computed by counting the number of syllables.
@@ -113,10 +116,19 @@ class FlaggedWordsThresholdFilter(C4BadWordsFilter):
             default_language=Languages.vietnamese,
             exclusion_writer=exclusion_writer,
         )
-        if language_flagged_words_override is not None:
-            words = [re.escape(w.lower()) for w in language_flagged_words_override]
-            flagged_re = re.compile(r"(?:\W|^)({})(?:\W|$)".format("|".join(words)))
+        flagged = language_flagged_words_override
+        if flagged is not None:
+            if isinstance(flagged, list):
+                scores = {w: DEFAULT_SCORE for w in flagged}
+            elif isinstance(flagged, dict):
+                scores = flagged
+            else:
+                raise TypeError("Wrong type for scores:", type(scores))
+            escaped_words = [re.escape(w.lower()) for w in flagged]
+            # Must span over complete syllables
+            flagged_re = re.compile(r"(?:\W|^)({})(?:\W|$)".format("|".join(escaped_words)))
             self._badwords_regex[language] = flagged_re
+            self._flagged_words_scores = scores
 
         self.flagged_thr = flagged_thr
 
@@ -128,16 +140,24 @@ class FlaggedWordsThresholdFilter(C4BadWordsFilter):
             self.stat_update("missing_badwords_lang", f"missing_badwords_lang_{lang}")
             return True
         
-        num_flagged = len(badwords_regex.findall(doc.text.lower()))
+        flagged = badwords_regex.findall(doc.text.lower())
+        scores = [
+            self._flagged_words_scores.get(word) or DEFAULT_SCORE
+            for word in flagged
+        ]
+        # Exponential weight scale in (0, 1]
+        weights = [2 ** (x - 5) for x in scores]
+        total_flagged_weight = sum(
+            weight * word.count(' ')
+            for weight, word in zip(weights, flagged)
+        )
         num_syllables = len(doc.text.split())
-        ratio = num_flagged / num_syllables
+        ratio = total_flagged_weight / num_syllables
         if ratio > self.flagged_thr:
-            self.stat_update(f"documents_with_many_flagged_words_{lang}")
+            self.stat_update(f"over_flagged_words_threshold_{lang}")
             if self.keep_fraction > 0.0 and self.uniform() < self.keep_fraction:
-                self.stat_update(f"document_kept_with_many_flagged_words_{lang}")
                 return True
-            self.stat_update(f"document_removed_with_flagged_words_{lang}")
-            return False, f"document_removed_with_many_flagged_words_{lang}"
+            return False, f"too_many_flagged_words_{lang}"
         return True
     
 
@@ -237,7 +257,7 @@ main_processing_executor = LocalPipelineExecutor(
         FlaggedWordsThresholdFilter(
             language=Languages.vietnamese,
             language_flagged_words_override=FLAGGED_WORDS_SAILCRAFT,
-            flagged_thr=0.1,
+            flagged_thr=0.01,
             keep_fraction=0.1,
             seed=SEED,
             exclusion_writer=JsonlWriter(f"{FILTERING_REMOVED_DIR}/7_c4_badwords/{DUMP_TO_PROCESS}")
@@ -252,7 +272,7 @@ main_processing_executor = LocalPipelineExecutor(
     # TODO: increase when we're not testing anymore
     tasks=64,
     workers=8,
-    logging_dir=f"{MAIN_OUTPUT_DIR}/logs/base_processing/{DUMP_TO_PROCESS}",
+    logging_dir=f"{LOGGING_DIR}/base_processing/{DUMP_TO_PROCESS}",
 )
 
 
@@ -275,7 +295,7 @@ document_dedup_stage = LocalPipelineExecutor(
         ),
         JsonlWriter(output_intermediate_2),
     ],
-    logging_dir=f"{MAIN_OUTPUT_DIR}/logs/minhash/{DUMP_TO_PROCESS}",
+    logging_dir=f"{LOGGING_DIR}/minhash/{DUMP_TO_PROCESS}",
     depends=main_processing_executor,
 )
 
@@ -291,7 +311,7 @@ sequence_dedup_stage_1 = LocalPipelineExecutor(
     ],
     workers=16,
     tasks=tasks_sequence_dedup,
-    logging_dir=f"{MAIN_OUTPUT_DIR}/logs/es/1/{DUMP_TO_PROCESS}",
+    logging_dir=f"{LOGGING_DIR}/es/1/{DUMP_TO_PROCESS}",
     depends=document_dedup_stage,
 )
 
@@ -302,7 +322,7 @@ sequence_dedup_stage_2 = LocalPipelineExecutor(
         #    tasks_stage_1=tasks_sequence_dedup,
         #),
     ],
-    logging_dir=f"{MAIN_OUTPUT_DIR}/logs/es/2/{DUMP_TO_PROCESS}",
+    logging_dir=f"{LOGGING_DIR}/es/2/{DUMP_TO_PROCESS}",
     depends=sequence_dedup_stage_1,
 )
 
@@ -314,9 +334,8 @@ external_dedup_stage_3 = LocalPipelineExecutor(
         #    num_threads=16,
         #),
     ],
-    logging_dir=f"{MAIN_OUTPUT_DIR}/logs/es/2/{DUMP_TO_PROCESS}",
+    logging_dir=f"{LOGGING_DIR}/es/2/{DUMP_TO_PROCESS}",
     depends=sequence_dedup_stage_2,
-    skip_completed=True #hangs the pipeline
 )
 
 final_stage = LocalPipelineExecutor(
@@ -373,7 +392,7 @@ final_stage = LocalPipelineExecutor(
     ],
     tasks=64,
     workers=16,
-    logging_dir=f"{MAIN_OUTPUT_DIR}/logs/es/3/{DUMP_TO_PROCESS}",
+    logging_dir=f"{LOGGING_DIR}/es/3/{DUMP_TO_PROCESS}",
     depends=external_dedup_stage_3,
 )
 

@@ -2,7 +2,7 @@
 Constants for the Vietnamese language.
 """
 
-import importlib
+import json
 import requests
 
 from diskcache import Cache
@@ -22,22 +22,17 @@ def download_vietnamese_stopwords(url: str) -> list[str]:
 STOP_WORDS_URL = "https://github.com/stopwords/vietnamese-stopwords/raw/a453d389e1b52e20748ca83ddd8b0faebb04f5aa/vietnamese-stopwords.txt"
 STOP_WORDS = download_vietnamese_stopwords(STOP_WORDS_URL)
 
-def compile_module(name: str, source: str):
-    """Create a module from a source string."""
-    spec = importlib.util.spec_from_loader(name, loader=None)
-    module = importlib.util.module_from_spec(spec)
-    exec(source, module.__dict__)
-    return module
 
 @_cache.memoize(tag="vietnamese-flagged-words")
-def download_vietnamese_flagged_words(url: str) -> list[str]:
+def download_vietnamese_flagged_words(url: str) -> dict[str, int]:
     logger.info("Downloading Vietnamese flagged words from {}", url)
     r = requests.get(url)
-    flagged_words = compile_module('flagged_words', r.text)
-    return flagged_words.flagged_words['vi'] # noqa
+    flagged_words = json.loads(r.text)
+    assert isinstance(flagged_words, dict)
+    return flagged_words
 
 # TODO: find words that identify adult websites very strongly
 # Weigh words by "cursedness" and audit unnecessary words in the list
 # remove unnecessary words and lower flagging threshold
-FLAGGED_WORDS_URL = "https://github.com/sail-sg/sailcraft/raw/315d002711dea7b2541bdab2a322c45bb2e197fa/code/data_cleaning/flagged_words.py"
+FLAGGED_WORDS_URL = "https://gist.githubusercontent.com/slivering/4ab824e9957fa3663ee5ef5d7c7e4315/raw/8068544f25a8d2559803ce2c3dcd94709f6a3fc1/vietnamese_flagged_words.json"
 FLAGGED_WORDS_SAILCRAFT = download_vietnamese_flagged_words(FLAGGED_WORDS_URL)
