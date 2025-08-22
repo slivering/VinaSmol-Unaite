@@ -38,5 +38,6 @@ def download_vietnamese_flagged_words(url: str) -> list[str]:
 
 # TODO: find words that identify adult websites very strongly
 # Weigh words by "cursedness" and audit unnecessary words in the list
+# remove unnecessary words and lower flagging threshold
 FLAGGED_WORDS_URL = "https://github.com/sail-sg/sailcraft/raw/315d002711dea7b2541bdab2a322c45bb2e197fa/code/data_cleaning/flagged_words.py"
 FLAGGED_WORDS_SAILCRAFT = download_vietnamese_flagged_words(FLAGGED_WORDS_URL)

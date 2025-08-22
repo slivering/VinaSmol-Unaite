@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from datasets import Dataset, enable_progress_bars, load_dataset
+from datasets import Dataset, IterableDataset, enable_progress_bars, load_dataset
 
 from ...hfmodel import BASE_MODEL, SMOLLM2, LUCIE
 from . import DATA_DIR, DATA_DIR_EN, DATA_DIR_VI
@@ -21,7 +21,7 @@ def estimate_dataset_size(dataset: Dataset, text_column: str = 'text') -> int:
     return int(0.5 * sum(map(len, dataset[text_column])))
 
 def to_sharded_parquet(
-        dataset: Dataset,
+        dataset: Dataset | IterableDataset,
         dir: str | Path,
         shard_size_bytes: int = SHARD_SIZE,
     ) -> list[Path]:
@@ -36,6 +36,9 @@ def to_sharded_parquet(
     Returns:
         files (list[Path]): The list of shards paths.
     """
+    if isinstance(dataset, IterableDataset):
+        dataset = Dataset.from_list(list(dataset), features=dataset.features)
+
     dir = Path(dir)
     dir.mkdir(parents=True, exist_ok=True)
     num_shards = max(1, estimate_dataset_size(dataset) // shard_size_bytes)

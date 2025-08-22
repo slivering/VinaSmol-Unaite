@@ -16,12 +16,29 @@ from rensa import RMinHash, RMinHashLSH
 # TODO: Possibly apply stronger rules for deduplication, such as:
 # - Linewise filtering: Read more, sign-in, items in cart... (see RefinedWeb G.2)
 
-# https://github.com/beowolx/rensa?tab=readme-ov-file#deduplicating-with-rminhashlsh
-
+# Hashing is massively parallelizable but we don't need to implement merging
+# since Rensa is efficient enough for ~10 GB datasets.
 class RensaBuildIndex(PipelineStep):
-    """Build a MinHashLSH index with Rensa as a backend.
+    """Build a MinHashLSH index with [Rensa](https://github.com/beowolx/rensa) as a backend.
     
-    For now, hash computation is single-threaded, without merging results.
+    This pipeline step is single-threaded and should be run with one worker only.
+    It eagerly processes its input documents all at once, has no side effect on the documents
+    and returns `None`. This means you should write the result of the previous pipeline steps
+    to disk, and read it back just after.
+
+    # Example
+
+    ```python
+    rensa_index = RensaBuildIndex()
+    pipeline = [
+        JsonlReader(data_dir),
+        rensa_index,            # Process all of the documents eagerly and discard them
+        JsonlReader(data_dir),  # Stream all of the documents back into the pipeline
+        ...
+    ]
+    LocalPipelineExecutor(pipeline, workers=1).run()
+    # `rensa_index` can be reused by other pipeline steps or even from different pipelines
+    ```
     """
 
     name = "🗂️ Rensa deduplication stage 1"
@@ -50,21 +67,18 @@ class RensaBuildIndex(PipelineStep):
             num_bands=num_bands,
         )
     
-    def run(self, data: DocumentsPipeline, rank: int = 0, world_size: int = 1) -> DocumentsPipeline:
+    def run(self, data: DocumentsPipeline, rank: int = 0, world_size: int = 1) -> None:
         if rank != 0:
-            raise RuntimeError("Cannot run RensaBuildIndex with multiple workers")
-        if data:
-            for document in data:
-                assert hasattr(self, "_minhashes")
-                self.index(document)
-                if not hasattr(self, "_minhashes"):
-                    raise RuntimeError("WTF0")
-                yield document
-                if not hasattr(self, "_minhashes"):
-                    raise RuntimeError("WTF1")
+            raise ValueError("Cannot run RensaBuildIndex with multiple workers")
+        if not data:
+            raise ValueError("Missing documents to index")
+        for document in data:
+            self.index(document)
     
     def index(self, document: Document):
         rminhash_obj = self.generate_minhash_signature(document.text)
+        if document.id in self._minhashes:
+            raise RuntimeError(f"Found duplicate document id: {document.id}")
         self._minhashes[document.id] = rminhash_obj
         self._lsh_index.insert(document.id, rminhash_obj)
     
@@ -76,10 +90,29 @@ class RensaBuildIndex(PipelineStep):
 
 
 class RensaDeduplicate(BaseFilter):
-    """Deduplicate documents with a MinHashLSH index implemented by Rensa.
+    """Deduplicate documents with a MinHashLSH index implemented by [Rensa](https://github.com/beowolx/rensa).
 
-    Deduplication is single-threaded and not distributed, which is sufficient for our scale.
-    See real-world benchmarks [here](https://github.com/beowolx/rensa?tab=readme-ov-file#large-scale-benchmark-salesforcewikitext-18-million-rows).
+    This pipeline step is single-threaded and needs `RensaBuildIndex` to be fully built
+    before it processes any documents.
+
+    # Example
+
+    ```python
+    rensa_index = RensaBuildIndex()
+    pipeline = [
+        JsonlReader(data_dir),
+        rensa_index,
+        JsonlReader(data_dir),
+        RensaDeduplicate(rensa_index=rensa_index),
+        ...
+    ]
+    ```
+
+    # Performance
+
+    Deduplication does not need to be distributed for ~10 GB datasets since Rensa is optimized
+    enough for single-thread performance. See real-world benchmarks
+    [here](https://github.com/beowolx/rensa?tab=readme-ov-file#large-scale-benchmark-salesforcewikitext-18-million-rows).
     """
 
     name = "🦀 Rensa deduplication stage 2"
@@ -97,7 +130,9 @@ class RensaDeduplicate(BaseFilter):
         self._num_visited = 0
     
     def clear(self):
-        logger.warning("Clearing Rensa index to free memory")
+        logger.debug("Clearing Rensa index to free {} minhashes", self._num_visited)
+        if not hasattr(self, '_to_remove'):
+            raise RuntimeError("RensaBuildIndex did not eagerly process all of the documents")
         del self._to_remove
         del self.rensa_index._lsh_index
         del self.rensa_index._minhashes

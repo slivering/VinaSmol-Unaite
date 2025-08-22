@@ -34,7 +34,7 @@ from .constants import (
     STOP_WORDS,
     FLAGGED_WORDS_SAILCRAFT,
 )
-#from .deduplication import ESComputeRangesExternal, RensaBuildIndex, RensaDeduplicate
+from .deduplication import ESComputeRangesExternal, RensaBuildIndex, RensaDeduplicate
 from .normalization import Formatter
 
 VIETNAMESE_TOKENIZER = SAILOR_2_8B.tokenizer
@@ -43,11 +43,18 @@ top_k_config = TopKConfig(top_k_groups=["fqdn"], top_k=10_000)
 
 MAIN_OUTPUT_DIR = DATA_DIR
 FILTERING_OUTPUT_DIR = (DATA_DIR / "filtering").resolve()
+FILTERING_REMOVED_DIR = (FILTERING_OUTPUT_DIR / "removed").resolve()
 ES_DIR = DATA_DIR / "es"
 STATS_DIR = DATA_DIR / "stats"
 
 DUMP_TO_PROCESS = "vi-all"
 SEED = 20250801
+
+DOMAIN_WHITELIST = [
+    "wikipedia.org",
+    "wikihow.com",
+]
+DOMAIN_WHITELIST += DatasetNames.PLACEHOLDER_URLS
 
 
 class URLFilterWithWhitelist(URLFilter):
@@ -142,7 +149,8 @@ main_processing_executor = LocalPipelineExecutor(
     pipeline=[
         ParquetReader(
             str(DATA_DIR_VI),
-            limit=100_000, # TODO: remove, for debugging
+            recursive=True,
+            limit=10_000, # TODO: remove, for debugging
             default_metadata={"dump": DUMP_TO_PROCESS},
         ),
         # URL filtering for malicious, toxic and adult websites
@@ -153,10 +161,10 @@ main_processing_executor = LocalPipelineExecutor(
         # TODO: ignore absent URL fields
         URLFilterWithWhitelist(
             # TODO: add other domains if useful
-            domain_whitelist=["wikipedia.org"] + DatasetNames.PLACEHOLDER_URLS,
+            domain_whitelist=DOMAIN_WHITELIST,
             extra_domains=None,
             extra_urls=None,
-            exclusion_writer=JsonlWriter(f"{FILTERING_OUTPUT_DIR}/removed/1_url/{DUMP_TO_PROCESS}"),
+            exclusion_writer=JsonlWriter(f"{FILTERING_REMOVED_DIR}/1_url/{DUMP_TO_PROCESS}"),
         ),
         Formatter(
             strip_whitespace=False, # TODO: only False for code and code excerpts
@@ -166,17 +174,12 @@ main_processing_executor = LocalPipelineExecutor(
             # It's okay to have English data in the corpus if it's about Vietnam.
             # Since it's a minority, it won't affect much of the proportions.
             # However, for consistency with the next filters, we restrict to only one language
-            # FIXME: we may have to extract mtet from the dataset because it will be flagged
-            # as English. Same for some subsets of VJOL
-            # TODO: extract three subsets: English, Vietnamese, parallel
-            # FIXME: too many false positives
-            [Languages.vietnamese],
+            # as English.
+            # TODO: exclude mtet and add it in the end, split VJOL depending on language
+            ['vie_Latn'], # GlotLID -> vie_Latn, FT176LID -> vi
             language_threshold=0.65,
-            backend="ft176",
-            exclusion_writer=JsonlWriter(
-                f"{FILTERING_OUTPUT_DIR}/2_non_vietnamese/",
-                output_filename="${language}/" + DUMP_TO_PROCESS + "/${rank}.jsonl.gz",
-            ),
+            backend="glotlid", # FIXME: is the LID duplicated across workers?
+            exclusion_writer=JsonlWriter(f"{FILTERING_REMOVED_DIR}/2_non_vietnamese"),
         ),
 
         # FIXME: unfortunately there's a lot of redundant work due to repeated tokenization
@@ -193,7 +196,7 @@ main_processing_executor = LocalPipelineExecutor(
             language=Languages.vietnamese,
             # TODO: audit removed samples due to ngram filters
             # Poems might be affected and coefficients might be different for Vietnamese
-            exclusion_writer=JsonlWriter(f"{FILTERING_OUTPUT_DIR}/removed/3_gopher_rep/{DUMP_TO_PROCESS}"),
+            exclusion_writer=JsonlWriter(f"{FILTERING_REMOVED_DIR}/3_gopher_rep/{DUMP_TO_PROCESS}"),
         ),
         GopherQualityFilter(
             min_doc_words=50, # Tokens counted by spaCy's Vietnamese tokenizer 
@@ -205,7 +208,7 @@ main_processing_executor = LocalPipelineExecutor(
             min_stop_words=2,
             stop_words=STOP_WORDS, # Some words in this list have two Spacy tokens. This is ok.
             language=Languages.vietnamese,
-            exclusion_writer=JsonlWriter(f"{FILTERING_OUTPUT_DIR}/removed/4_gopher_qual/{DUMP_TO_PROCESS}"),
+            exclusion_writer=JsonlWriter(f"{FILTERING_REMOVED_DIR}/4_gopher_qual/{DUMP_TO_PROCESS}"),
         ),
         C4QualityFilter(
             filter_no_terminal_punct=False,
@@ -217,7 +220,7 @@ main_processing_executor = LocalPipelineExecutor(
             filter_policy=True,
             remove_citations=True,
             language=Languages.vietnamese,
-            exclusion_writer=JsonlWriter(f"{FILTERING_OUTPUT_DIR}/removed/5_c4/{DUMP_TO_PROCESS}"),
+            exclusion_writer=JsonlWriter(f"{FILTERING_REMOVED_DIR}/5_c4/{DUMP_TO_PROCESS}"),
         ),
         FineWebQualityFilter(
             # Keep the lower bound low in order to tolerate many newlines in paragraph formatting
@@ -228,7 +231,7 @@ main_processing_executor = LocalPipelineExecutor(
             char_duplicates_ratio=0.1, # TODO: try other values
             new_line_ratio=0.3,
             language=Languages.vietnamese,
-            exclusion_writer=JsonlWriter(f"{FILTERING_OUTPUT_DIR}/removed/6_fineweb_qual/{DUMP_TO_PROCESS}")
+            exclusion_writer=JsonlWriter(f"{FILTERING_REMOVED_DIR}/6_fineweb_qual/{DUMP_TO_PROCESS}")
         ),
         # TODO: audit for bias (e.g. medical content, Wikipedia...)
         FlaggedWordsThresholdFilter(
@@ -237,7 +240,7 @@ main_processing_executor = LocalPipelineExecutor(
             flagged_thr=0.1,
             keep_fraction=0.1,
             seed=SEED,
-            exclusion_writer=JsonlWriter(f"{FILTERING_OUTPUT_DIR}/removed/7_c4_badwords/{DUMP_TO_PROCESS}")
+            exclusion_writer=JsonlWriter(f"{FILTERING_REMOVED_DIR}/7_c4_badwords/{DUMP_TO_PROCESS}")
         ),
 
         # Other filters: FastTextClassifierFilter (probably biased), SamplerFilter
@@ -248,28 +251,28 @@ main_processing_executor = LocalPipelineExecutor(
     ],
     # TODO: increase when we're not testing anymore
     tasks=64,
-    workers=16,
+    workers=8,
     logging_dir=f"{MAIN_OUTPUT_DIR}/logs/base_processing/{DUMP_TO_PROCESS}",
 )
 
 
-#rensa_index = RensaBuildIndex(
-#    num_perm=128,
-#    seed=SEED,
-#    lsh_threshold=0.8,
-#    num_bands=16,
-#    final_jaccard_threshold=0.85,
-#)
+rensa_index = RensaBuildIndex(
+    num_perm=128,
+    seed=SEED,
+    lsh_threshold=0.8,
+    num_bands=16,
+    final_jaccard_threshold=0.85,
+)
 
 document_dedup_stage = LocalPipelineExecutor(
     pipeline=[
         JsonlReader(output_intermediate_1),
-        # FIXME: weird bug in garbage collection between pyo3 and multiprocessing
-        #rensa_index,
-        #RensaDeduplicate(
-        #    rensa_index=rensa_index,
-        #    exclusion_writer=JsonlWriter(f"{FILTERING_OUTPUT_DIR}/removed/8_dedup/{DUMP_TO_PROCESS}")
-        #),
+        rensa_index,
+        JsonlReader(output_intermediate_1),
+        RensaDeduplicate(
+            rensa_index=rensa_index,
+            exclusion_writer=JsonlWriter(f"{FILTERING_REMOVED_DIR}/8_dedup/{DUMP_TO_PROCESS}")
+        ),
         JsonlWriter(output_intermediate_2),
     ],
     logging_dir=f"{MAIN_OUTPUT_DIR}/logs/minhash/{DUMP_TO_PROCESS}",
@@ -311,7 +314,6 @@ external_dedup_stage_3 = LocalPipelineExecutor(
         #    num_threads=16,
         #),
     ],
-    workers=1,
     logging_dir=f"{MAIN_OUTPUT_DIR}/logs/es/2/{DUMP_TO_PROCESS}",
     depends=sequence_dedup_stage_2,
     skip_completed=True #hangs the pipeline
