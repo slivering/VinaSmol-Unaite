@@ -44,6 +44,8 @@ def setup_logging(logging_dir: Path):
         level="DEBUG",
         rotation="10 MB",
     )
+    logger.configure(handlers=[dict(sink=lambda msg: tqdm.write(msg, end=''), colorize=True)])
+
 
 def save_results(compressions: dict[str, str], logging_dir: Path):
     conversions_file = logging_dir / "pdf_compressions.json"
@@ -66,6 +68,7 @@ def main(
         logging_dir (Path, optional): The directory to save logs and results.
         exclude_scanned (bool, optional): Do not compress scanned PDFs.
     """
+    dir = dir.resolve()
     logging_dir = logging_dir.resolve()
     setup_logging(logging_dir)
     
@@ -77,7 +80,7 @@ def main(
         text_info_file = logging_dir / "pdf_text_info.json"
         if not text_info_file.exists():
             subprocess.check_output([
-                "./scan_infer.py",
+                "python", f"{Path(__file__).parent / 'scan_infer.py'}",
                 f"{dir}",
                 "--logging-dir", f"{logging_dir}",
             ])

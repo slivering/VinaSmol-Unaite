@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import random
 import re
+import sys
 import time
 
 import requests
@@ -25,7 +26,6 @@ from . import (
 )
 
 from .license import LicenseResult, cc_right_in_licenses
-from .logging import setup_logging
 from .network import (
     auto_patch_ssl_verification,
     auto_patch_ssl_verification_async,
@@ -613,6 +613,17 @@ class CCVJDownloader:
         # TODO: re-save self.records to each journal records file
         return asyncio.run(self.download_records_as_pdf())
 
+
+def setup_logging(logfile: Path):
+    logger.level(name="DEBUG", color="<fg 30>")
+    logger.add(
+        sys.stderr,
+        level="DEBUG",
+        colorize=True,
+        format="<green>{time}</green> <level>{message}</level>",
+    )
+    logger.configure(handlers=[dict(sink=lambda msg: tqdm.write(msg, end=''), colorize=True)])
+    logger.add(logfile, format="{time} {level} {message}", level="DEBUG", rotation="100 MB")
 
 
 app = typer.Typer(pretty_exceptions_show_locals=False)

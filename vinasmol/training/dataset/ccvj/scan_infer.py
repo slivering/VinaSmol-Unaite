@@ -36,6 +36,7 @@ def setup_logging(logging_dir: Path):
         level="DEBUG",
         rotation="10 MB",
     )
+    logger.configure(handlers=[dict(sink=lambda msg: tqdm.write(msg, end=''), colorize=True)])
 
 def pdfs_to_infer(dir: Path):
     for pdf_file in dir.glob("./**/*.pdf"):
@@ -49,8 +50,7 @@ def save_results(infos: dict[str, str], logging_dir: Path):
     infos_file.write_text(json.dumps(infos, indent=2))
 
 def main(
-        pdf_dir: Path = Path('.'),
-        *,
+        pdf_dir: Path,
         logging_dir: Path = Path("./logs"),
     ):
     setup_logging(logging_dir)
@@ -58,12 +58,12 @@ def main(
     results = {}
     pool = ThreadPool()
 
-    args = list(pdfs_to_infer(pdf_dir))
+    pdfs = list(pdfs_to_infer(pdf_dir))
 
     results = iter(tqdm(
-        pool.imap_unordered(get_pdf_text_info),
+        pool.imap_unordered(get_pdf_text_info, pdfs),
         desc="Get PDF text infos",
-        total=len(args)
+        total=len(pdfs)
     ))
 
     infos = {}
