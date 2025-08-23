@@ -28,6 +28,11 @@ SMOLLM2 = HFModel(
 )
 
 # For Vietnamese tokenization when processing the dataset
+VINALLAMA_7B = HFModel(
+    name="vilm/vinallama-7b-chat",
+    tokenizer="vilm/vinallama-7b-chat",
+)
+
 SAILOR_2_8B = HFModel(
     name="sail/Sailor2-8B-Chat",
     tokenizer="sail/Sailor2-8B-Chat",

@@ -1,8 +1,8 @@
 import re
 
 from datatrove.executor.local import LocalPipelineExecutor
-
 from datatrove.data import Document
+from datatrove.pipeline.filters.base_filter import BaseFilter
 from datatrove.pipeline.filters import (
     C4BadWordsFilter,
     C4QualityFilter,
@@ -19,16 +19,18 @@ from datatrove.pipeline.stats import (
     #CCNetPerplexityStats,
     TopKConfig,
 )
-#from datatrove.pipeline.dedup import ESDatasetToSequence, ESMergeSequences, ESRangeRemover
+from datatrove.pipeline.dedup import ESDatasetToSequence, ESMergeSequences, ESRangeRemover
 from datatrove.pipeline.formatters import PIIFormatter
 from datatrove.pipeline.readers.jsonl import JsonlReader
 from datatrove.pipeline.readers.parquet import ParquetReader
 from datatrove.pipeline.writers.jsonl import JsonlWriter
 from datatrove.utils.text import Languages
 
+from tldextract import TLDExtract
+
 from vinasmol.training.dataset.preprocessing import DatasetNames
 
-from ...hfmodel import SAILOR_2_8B
+from ...hfmodel import VINALLAMA_7B
 from . import DATA_DIR, DATA_DIR_VI
 from .constants import (
     STOP_WORDS,
@@ -37,7 +39,7 @@ from .constants import (
 from .deduplication import ESComputeRangesExternal, RensaBuildIndex, RensaDeduplicate
 from .normalization import Formatter
 
-VIETNAMESE_TOKENIZER = SAILOR_2_8B.tokenizer
+VIETNAMESE_TOKENIZER = VINALLAMA_7B.tokenizer
 
 top_k_config = TopKConfig(top_k_groups=["fqdn"], top_k=10_000)
 
@@ -58,27 +60,47 @@ DOMAIN_WHITELIST = [
 DOMAIN_WHITELIST += DatasetNames.PLACEHOLDER_URLS
 
 
-class URLFilterWithWhitelist(URLFilter):
-    """Perform filtering on URLs, whith a domain whitelist."""
+class DomainWhitelistMixin(BaseFilter):
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        cls.name = f"{cls.name} (with 📋 whitelist)"
 
-    name = "😈 Url-filter (with 📋 whitelist)"
-
-    def __init__(self, domain_whitelist: list[str] = None, **kwargs):
-        super().__init__(**kwargs)
-        self.domain_whitelist = domain_whitelist
+    def __init__(
+            self,
+            *args,
+            domain_whitelist: list[str] = None,
+            allow_no_url: bool = False,
+            **kwargs,
+        ):
+        super().__init__(*args, **kwargs)
+        self.domain_whitelist = domain_whitelist or []
         # TODO: allow domain suffix wildcard
+        self.allow_no_url = allow_no_url
+
+        if not hasattr(self, 'tldextractor'):
+            self.tldextractor = TLDExtract()
     
     def filter(self, document: Document):
         url = document.metadata.get("url")
         if not url:
-            # Accept sources which have no URL by design
-            return True
+            if self.allow_no_url:
+                # Accept sources which have no URL by design
+                return True
+            raise ValueError("Missing document 'url' field")
 
         url_info = self.tldextractor(url)
         if url_info.top_domain_under_public_suffix in self.domain_whitelist:
             return True
 
         return super().filter(document)
+
+class URLFilterWithWhitelist(DomainWhitelistMixin, URLFilter):
+    """Perform filtering on URLs, whith a domain whitelist."""
+
+
+class LanguageFilterWithWhitelist(DomainWhitelistMixin, LanguageFilter):
+    """Perform filtering on URLs, whith a domain whitelist."""
+
 
 
 DEFAULT_SCORE = 3
@@ -165,6 +187,8 @@ output_intermediate_1 = f"{FILTERING_OUTPUT_DIR}/output_1/{DUMP_TO_PROCESS}"
 output_intermediate_2 = f"{FILTERING_OUTPUT_DIR}/output_2/{DUMP_TO_PROCESS}"
 es_dir_vi = f"{ES_DIR}/{DUMP_TO_PROCESS}"
 
+# TODO: make English pipeline
+
 main_processing_executor = LocalPipelineExecutor(
     pipeline=[
         ParquetReader(
@@ -181,16 +205,17 @@ main_processing_executor = LocalPipelineExecutor(
         # TODO: ignore absent URL fields
         URLFilterWithWhitelist(
             # TODO: add other domains if useful
-            domain_whitelist=DOMAIN_WHITELIST,
             extra_domains=None,
             extra_urls=None,
             exclusion_writer=JsonlWriter(f"{FILTERING_REMOVED_DIR}/1_url/{DUMP_TO_PROCESS}"),
+            domain_whitelist=DOMAIN_WHITELIST,
+            allow_no_url=True,
         ),
         Formatter(
             strip_whitespace=False, # TODO: only False for code and code excerpts
             normalize_punctuation=False,
         ),
-        LanguageFilter(
+        LanguageFilterWithWhitelist(
             # It's okay to have English data in the corpus if it's about Vietnam.
             # Since it's a minority, it won't affect much of the proportions.
             # However, for consistency with the next filters, we restrict to only one language
@@ -200,6 +225,8 @@ main_processing_executor = LocalPipelineExecutor(
             language_threshold=0.65,
             backend="glotlid", # FIXME: is the LID duplicated across workers?
             exclusion_writer=JsonlWriter(f"{FILTERING_REMOVED_DIR}/2_non_vietnamese"),
+            domain_whitelist=[DatasetNames.mtet.placeholder_url],
+            allow_no_url=True,
         ),
 
         # FIXME: unfortunately there's a lot of redundant work due to repeated tokenization
@@ -246,6 +273,7 @@ main_processing_executor = LocalPipelineExecutor(
             # Keep the lower bound low in order to tolerate many newlines in paragraph formatting
             line_punct_thr=0.1,
             line_punct_exclude_zero=False,
+            # Improvement: merge short adjacent examples
             short_line_thr=0.67,
             short_line_length=20, # TODO: audit for bias (e.g. poem exclusion)
             char_duplicates_ratio=0.1, # TODO: try other values
@@ -269,7 +297,6 @@ main_processing_executor = LocalPipelineExecutor(
 
         JsonlWriter(output_intermediate_1),
     ],
-    # TODO: increase when we're not testing anymore
     tasks=64,
     workers=8,
     logging_dir=f"{LOGGING_DIR}/base_processing/{DUMP_TO_PROCESS}",
@@ -304,10 +331,10 @@ tasks_sequence_dedup = 64
 sequence_dedup_stage_1 = LocalPipelineExecutor(
     pipeline=[
         JsonlReader(output_intermediate_2),
-        #ESDatasetToSequence(
-        #    output_folder=es_dir_vi,
-        #    tokenizer_name_or_path=VIETNAMESE_TOKENIZER,
-        #),
+        ESDatasetToSequence(
+            output_folder=es_dir_vi,
+            tokenizer_name_or_path=VIETNAMESE_TOKENIZER,
+        ),
     ],
     workers=16,
     tasks=tasks_sequence_dedup,
@@ -317,10 +344,10 @@ sequence_dedup_stage_1 = LocalPipelineExecutor(
 
 sequence_dedup_stage_2 = LocalPipelineExecutor(
     pipeline=[
-        #ESMergeSequences(
-        #    data_folder=es_dir_vi,
-        #    tasks_stage_1=tasks_sequence_dedup,
-        #),
+        ESMergeSequences(
+            data_folder=es_dir_vi,
+            tasks_stage_1=tasks_sequence_dedup,
+        ),
     ],
     logging_dir=f"{LOGGING_DIR}/es/2/{DUMP_TO_PROCESS}",
     depends=sequence_dedup_stage_1,
@@ -328,11 +355,11 @@ sequence_dedup_stage_2 = LocalPipelineExecutor(
 
 external_dedup_stage_3 = LocalPipelineExecutor(
     pipeline=[
-        #ESComputeRangesExternal(
-        #    length_threshold=100,
-        #    data_folder=es_dir_vi,
-        #    num_threads=16,
-        #),
+        ESComputeRangesExternal(
+            length_threshold=100,
+            data_folder=es_dir_vi,
+            num_threads=16,
+        ),
     ],
     logging_dir=f"{LOGGING_DIR}/es/2/{DUMP_TO_PROCESS}",
     depends=sequence_dedup_stage_2,
@@ -341,12 +368,12 @@ external_dedup_stage_3 = LocalPipelineExecutor(
 final_stage = LocalPipelineExecutor(
     pipeline=[
         JsonlReader(output_intermediate_2),
-        #ESRangeRemover(
-        #    min_doc_words=50,
-        #    sequence_folder=es_dir_vi,
-        #    tokenizer_name_or_path=VIETNAMESE_TOKENIZER,
-        #    language=Languages.vietnamese,
-        #),
+        ESRangeRemover(
+            min_doc_words=50,
+            sequence_folder=es_dir_vi,
+            tokenizer_name_or_path=VIETNAMESE_TOKENIZER,
+            language=Languages.vietnamese,
+        ),
         DocStats(
             f"{STATS_DIR}/docs",
             top_k_config=top_k_config,
