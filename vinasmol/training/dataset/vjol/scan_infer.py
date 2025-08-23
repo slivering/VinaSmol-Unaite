@@ -1,0 +1,85 @@
+#!/usr/bin/python
+
+from enum import StrEnum
+import json
+from multiprocessing.pool import ThreadPool
+from pathlib import Path
+import subprocess
+
+
+from loguru import logger
+from tqdm import tqdm
+import typer
+
+
+class PDFTextInfo(StrEnum):
+    TEXT = "text"
+    SCANNED = "scanned"
+    UNKNOWN = "unknown"
+
+
+def get_pdf_text_info(pdf_file: Path) -> tuple[Path, PDFTextInfo]:
+    pdf_file = pdf_file.resolve()
+    has_text = subprocess.run(["grep", "-aq", "/Text/" f"{pdf_file}"]).returncode == 0
+    if has_text:
+        return pdf_file, PDFTextInfo.TEXT
+    has_image = subprocess.run(["grep", "-aq", "/Image/" f"{pdf_file}"]).returncode == 0
+    if has_image:
+        return pdf_file, PDFTextInfo.SCANNED
+    return pdf_file, PDFTextInfo.UNKNOWN
+
+def setup_logging(logging_dir: Path):
+    logging_dir.mkdir(parents=True, exist_ok=True)
+    logger.add(
+        logging_dir / "scan_infer.log",
+        format="{time} {level} {message}",
+        level="DEBUG",
+        rotation="10 MB",
+    )
+
+def pdfs_to_infer(dir: Path):
+    for pdf_file in dir.glob("./**/*.pdf"):
+        pdf_file = pdf_file.resolve()
+        if pdf_file.name.endswith("_compressed.pdf"):
+            continue
+        yield pdf_file
+
+def save_results(infos: dict[str, str], logging_dir: Path):
+    infos_file = logging_dir / "pdf_text_info.json"
+    infos_file.write_text(json.dumps(infos, indent=2))
+
+def main(
+        pdf_dir: Path = Path('.'),
+        *,
+        logging_dir: Path = Path("./logs"),
+    ):
+    setup_logging(logging_dir)
+
+    results = {}
+    pool = ThreadPool()
+
+    args = list(pdfs_to_infer(pdf_dir))
+
+    results = iter(tqdm(
+        pool.imap_unordered(get_pdf_text_info),
+        desc="Get PDF text infos",
+        total=len(args)
+    ))
+
+    infos = {}
+    while True:
+        try:
+            pdf_file, info = next(results)
+            infos[f"{pdf_file.resolve()}"] = f"{info}"
+        except subprocess.CalledProcessError as e:
+            logger.exception("Failed get info for {}", pdf_file)
+            logger.error(f"\tStdout:\n{e.stdout.decode('utf-8')}")
+            logger.error(f"\tStderr:\n{e.stderr.decode('utf-8')}")
+        except StopIteration:
+            break
+
+    save_results(infos, logging_dir)
+
+
+if __name__ == '__main__':
+    typer.run(main)

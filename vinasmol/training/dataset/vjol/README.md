@@ -22,6 +22,13 @@ Downloading metadata and the papers can take a few hours. Expect around 50GB of 
 
 The script will resume where it left off if you execute it a second time.
 
+### Compress the PDFs
+
+You need the [GhostScript](https://www.ghostscript.com) command (`gs`) available on your `PATH` environment variable.
+
+```bash
+python compress_pdfs.py data/vjol/pdf
+```
 
 ## Licenses
 
