@@ -1,5 +1,6 @@
-from datasets import enable_progress_bars, load_dataset
 from pathlib import Path
+
+from datasets import enable_progress_bars, load_dataset
 
 from ...hfmodel import BASE_MODEL, SMOLLM2, LUCIE
 from .preprocessing import (

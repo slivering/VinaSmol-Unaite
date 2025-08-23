@@ -161,6 +161,7 @@ class DatasetNames(StrEnum):
     bkai_news_corpus = "bkai-foundation-models/BKAINewsCorpus"
     vbpl = "doanhieung/vbpl"
     mtet = "phongmt184172/mtet"
+    ccvj = "ccvj" # In-house dataset
 
     _LOCK: Lock = None
     _IDS = {}
@@ -198,6 +199,7 @@ class DatasetNames(StrEnum):
                 cls.bkai_news_corpus,
                 cls.vbpl,
                 cls.mtet,
+                cls.ccvj,
             },
             LUCIE.name: set(cls.__members__.values())
         }
@@ -223,6 +225,7 @@ class DatasetNames(StrEnum):
             cls.bkai_news_corpus,
             cls.vbpl,
             cls.mtet,
+            cls.ccvj,
         }
         cls.CODE = {
             cls.lucie_training_code,
@@ -567,4 +570,14 @@ class NormalizeCols:
             url=f"{DatasetNames.mtet.placeholder_url}/{id}",
             text=NormalizeCols.format_prompt_response(row['prompt'], row['response']),
             metadata=DatasetNames.mtet.origin_metadata(),
+        )
+    
+    @staticmethod
+    def ccvj(row: dict) -> dict:
+        # TODO
+        raise NotImplementedError
+        return dict(
+            id=DatasetNames.ccvj.generate_row_id(),
+            text=row['text'],
+            metadata=DatasetNames.ccvj.origin_metadata(),
         )
