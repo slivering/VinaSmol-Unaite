@@ -17,13 +17,17 @@ class PDFTextInfo(StrEnum):
     SCANNED = "scanned"
     UNKNOWN = "unknown"
 
+def find_substring(file: Path, substring: str) -> bool:
+    return subprocess.run(
+        ["grep", "-aqs", substring, f"{file}"],
+    ).returncode == 0
 
 def get_pdf_text_info(pdf_file: Path) -> tuple[Path, PDFTextInfo]:
     pdf_file = pdf_file.resolve()
-    has_text = subprocess.run(["grep", "-aq", "/Text/" f"{pdf_file}"]).returncode == 0
+    has_text = find_substring(pdf_file, "/Text/")
     if has_text:
         return pdf_file, PDFTextInfo.TEXT
-    has_image = subprocess.run(["grep", "-aq", "/Image/" f"{pdf_file}"]).returncode == 0
+    has_image = find_substring(pdf_file, "/Image/")
     if has_image:
         return pdf_file, PDFTextInfo.SCANNED
     return pdf_file, PDFTextInfo.UNKNOWN
@@ -41,7 +45,7 @@ def setup_logging(logging_dir: Path):
 def pdfs_to_infer(dir: Path):
     for pdf_file in dir.glob("./**/*.pdf"):
         pdf_file = pdf_file.resolve()
-        if pdf_file.name.endswith("_compressed.pdf"):
+        if pdf_file.name.endswith(".pdf.bkp"):
             continue
         yield pdf_file
 
@@ -65,7 +69,6 @@ def main(
         desc="Get PDF text infos",
         total=len(pdfs)
     ))
-
     infos = {}
     while True:
         try:
@@ -78,6 +81,7 @@ def main(
         except StopIteration:
             break
 
+    infos = dict(sorted(infos.items()))
     save_results(infos, logging_dir)
 
 

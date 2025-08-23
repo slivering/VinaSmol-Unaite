@@ -8,7 +8,7 @@ We compile a new dataset by downloading 12000 academic papers from 18 permissive
 
 To download the [OAI-PMH](https://www.openarchives.org/pmh/) API endpoints for harvesting, run the Jupyter notebook `doaj_vn.ipynb`.
 
-This notebook should create the file `./data/vjol/records/api_urls.json`, which contains one endpoint per journal.
+This notebook should create the file `./data/ccvj/records/api_urls.json`, which contains one endpoint per journal.
 
 ### Download the papers
 
@@ -29,7 +29,8 @@ We compress the PDFs that are not scanned in order to free some disk space and m
 You need the [GhostScript](https://www.ghostscript.com) command (`gs`) available on your `PATH` environment variable.
 
 ```bash
-python -m compress_pdfs data/vjol/pdf  --logging-dir logs
+python -m compress_pdfs data/ccvj/pdf  --logging-dir logs
+# rm $(ls ./**/*pdf.bkp) # Once you're satisfied with the results
 ```
 
 ### Convert the PDFs
