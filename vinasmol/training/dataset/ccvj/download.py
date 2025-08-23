@@ -1,4 +1,3 @@
-from dataclasses import dataclass
 from urllib.parse import urlparse, urlsplit
 import aiohttp
 import asyncio
@@ -8,10 +7,8 @@ import os
 from pathlib import Path
 import random
 import re
-import sys
 import time
 
-from datasets import Dataset, DatasetBuilder, load_dataset_builder
 import requests
 from requests import Session
 import rich
@@ -22,91 +19,32 @@ from tqdm import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 import typer
 
-from . import DATA_DIR
+from . import (
+    DATA_DIR, PDF_DOWNLOAD_DIR, RECORDS_DOWNLOAD_DIR,
+    JournalId, RecordMetadata, Url,
+)
 
-from .util import (
-    DictResource,
-    ListResource,
-    LicenseResult,
-    cc_right_in_licenses,
+from .license import LicenseResult, cc_right_in_licenses
+from .logging import setup_logging
+from .network import (
     auto_patch_ssl_verification,
     auto_patch_ssl_verification_async,
     DownloadResult,
     DownloadTracker,
 )
+from .resource import DictResource, ListResource
 
-Url = str
-JournalId = str
-RecordMetadata = dict[str, list]
 
 SIMULTANEOUS_DOWNLOADS = 4
 USER_AGENT = "vinasmol-training"
 
 VJOL_BASE_URL = "https://vjol.info.vn/index.php"
 LOGFILE = DATA_DIR / "vjol" / "vjol.log"
-RECORDS_DOWNLOAD_DIR = DATA_DIR / "vjol" / "records"
-PDF_DOWNLOAD_DIR = DATA_DIR / "vjol" / "pdf"
-OUT_DATASET_DIR = DATA_DIR / "vjol" / "parquet"
-REPO_ID = "vjol"
 
 _LICENSE_RE = re.compile(
     r'"(https?://creativecommons\.org/(?:licenses|publicdomain)/(?:[a-z0-9/\.-])+)"'
 )
 
-
-@dataclass
-class ConversionResult:
-    input_pdf_file: Path
-    output_md_file: Path
-    success: bool
-
-class PaperProcessor:
-    def __init__(self):
-        self.results: list[ConversionResult] = []
-    
-    def postprocess_md(self, md_content: str) -> str:
-        """Clean the markdown content to remove superfluous items."""
-        raise NotImplementedError
-
-    async def convert_pdf(
-            self,
-            pdf_file: str | Path,
-            output_md_file: str | Path,
-        ) -> ConversionResult:
-        """Process a PDF paper using scienceparse.
-
-        Args:
-            pdf_file (str | Path): the path to the downloaded paper as a PDF file.
-            output_md_file (str | Path): the file path to write Markdown content.
-        Returns:
-            ConversionResult: whether the PDF file was successfully converted.
-        """
-        # TODO: conversion should depend on whether the PDF is a whole issue or a single article
-        # issues: remove title page with TOC
-        raise NotImplementedError
-
-    async def convert_papers(self, download_dir: str | Path) -> list[ConversionResult]:
-        """Process PDF papers in bulk using scienceparse.
-
-        Args:
-            download_dir (str | Path): the directory that contains the downloaded PDFs.
-
-        Returns:
-            results (list[ConversionResult]): the conversion results.
-        """
-        download_dir = Path(download_dir)
-
-        # TODO: multiprocessing with pool
-        tasks = []
-        for pdf_file in download_dir.glob("*.pdf"):
-            md_file = download_dir / pdf_file.name.replace(".pdf", ".md")
-            task = self.convert_pdf(pdf_file, md_file)
-            tasks.append(task)
-
-        results: list[ConversionResult] = await asyncio.gather(*tasks)
-        self.results.extend(results)
-
-        return results
     
 def _Sickle_request(self, kwargs):
     """Monkeypatched function for Sickle._request."""
@@ -675,91 +613,6 @@ class VjolDownloader:
         # TODO: re-save self.records to each journal records file
         return asyncio.run(self.download_records_as_pdf())
 
-    def compile_dataset(
-            self,
-            markdown_files: dict[Path, Path],
-            dataset_dir: Path,
-        ) -> DatasetBuilder:
-        """Compile a Parquet dataset into a directory.
-
-        Args:
-            markdown_files (dict[Path, Path]): mapping from PDF files to Markdown files.
-            dataset_dir (Path): the output directory for the Parquet files.
-        
-        Returns:
-            DatasetBuilder: a builder of the compiled Parquet dataset files.
-        """
-
-        def gen_journal_records(journal: JournalId, journal_records: list[RecordMetadata]):
-            for record in journal_records:
-                if 'local_pdf_file' not in record:
-                    # PDF was not downloaded yet
-                    continue
-                local_pdf = record['local_pdf_file']
-                if local_pdf not in markdown_files:
-                    # PDF was not converted yet
-                    continue
-                record['local_md_file'] = markdown_files[local_pdf]
-                record['journal_id'] = journal
-                record['text'] = record['local_md_file'].read_text()
-                #del record['local_pdf_file']
-                #del record['local_md_file']
-                yield record
-
-        for journal, journal_records in tqdm(self.records.items(), desc="Compile journals"):
-            journal_ds = Dataset.from_generator(
-                gen_journal_records,
-                gen_kwargs=dict(journal=journal, journal_records=journal_records),
-            )
-            journal_ds.to_parquet(dataset_dir / f"{journal}.parquet")
-
-        return load_dataset_builder(
-            'text',
-            data_files=OUT_DATASET_DIR / "*.parquet",
-        )
-
-    
-
-def process_papers(processor: PaperProcessor, pdf_dir: Path) -> dict[Path, Path]:
-    # TODO: multiprocessing instead
-    results = asyncio.run(processor.convert_papers(pdf_dir))
-
-    pdf_to_md = {}
-    successes = []
-    failures = []
-    for result in results:
-        if result.success:
-            pdf_to_md[result.input_pdf_file] = result.output_md_file
-            successes.append(result)
-        else:
-            failures.append(result)
-    
-    logger.info("{} PDFs successfully converted to Markdown.", len(successes))
-    logger.warning("{} PDFs couldn't be converted.", len(failures))
-    return pdf_to_md
-
-def compile_and_load_vjol(
-        downloader: VjolDownloader,
-        pdf_to_md: dict[Path, Path],
-        dataset_dir: Path = OUT_DATASET_DIR,
-        streaming: bool = True,
-    ):
-    builder = downloader.compile_dataset(pdf_to_md, dataset_dir=dataset_dir)
-    if streaming:
-        return builder.as_streaming_dataset(split='train')
-    else:
-        return builder.as_dataset(split='train')
-
-def setup_logging(logfile: Path):
-    logger.level(name="DEBUG", color="<fg 30>")
-    logger.add(
-        sys.stderr,
-        level="DEBUG",
-        colorize=True,
-        format="<green>{time}</green> <level>{message}</level>",
-    )
-    logger.configure(handlers=[dict(sink=lambda msg: tqdm.write(msg, end=''), colorize=True)])
-    logger.add(logfile, format="{time} {level} {message}", level="DEBUG", rotation="100 MB")
 
 
 app = typer.Typer(pretty_exceptions_show_locals=False)
@@ -768,14 +621,12 @@ app = typer.Typer(pretty_exceptions_show_locals=False)
 def main(
         pdf_dir: Path = PDF_DOWNLOAD_DIR,
         records_dir: Path = RECORDS_DOWNLOAD_DIR,
-        out_dataset_dir: Path = OUT_DATASET_DIR,
-        repo_id: str = REPO_ID,
         simultaneous_downloads: int = SIMULTANEOUS_DOWNLOADS,
         logfile: Path = LOGFILE,
         user_agent: str = USER_AGENT,
         force_refresh_records: bool = False,
     ):
-    setup_logging(logfile)
+    setup_logging(logger, logfile)
 
     downloader = VjolDownloader(
         base_url=VJOL_BASE_URL,
@@ -787,13 +638,6 @@ def main(
     )
     with logging_redirect_tqdm():
         downloader.download_dataset_pdfs()
-
-        processor = PaperProcessor()
-        pdf_to_md = process_papers(processor, pdf_dir)
-
-    # TODO: upload to HuggingFace if not created, otherwise load_dataset the uploaded version
-    dataset = compile_and_load_vjol(downloader, pdf_to_md, streaming=True)
-    #dataset.push_to_hub(repo_id, private=True)
 
 if __name__ == '__main__':
     app()

@@ -1,5 +1,3 @@
-#!/usr/bin/python
-
 import json
 from multiprocessing.pool import ThreadPool
 from pathlib import Path

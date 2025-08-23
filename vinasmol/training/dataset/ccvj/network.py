@@ -1,9 +1,7 @@
-from abc import ABC, abstractmethod
 import asyncio
 from collections import deque
 import contextlib
 from dataclasses import dataclass
-import json
 from loguru import logger
 from pathlib import Path
 import ssl
@@ -17,6 +15,8 @@ import certifi
 import requests
 from urllib3.exceptions import InsecureRequestWarning
 from tqdm.asyncio import tqdm_asyncio
+
+from .license import LicenseResult
 
 # FIXME: this is a bit useless since requests already uses certifi.
 # There are also complications in virtual environments.
@@ -145,40 +145,6 @@ async def auto_patch_ssl_verification_async(url: str, session: aiohttp.ClientSes
             session._connector = old_session_connector
 
 
-class JSONResource(ABC):
-    """A JSON-serializable resource which is bound to a disk file."""
-    def __init__(self, file_path: Path, autoload: bool = True):
-        super().__init__()
-        self.file_path = Path(file_path)
-        if autoload and self.file_path.is_file():
-            self.load()
-    
-    def read(self):
-        return json.loads(self.file_path.read_text())
-
-    @abstractmethod
-    def load_with(self, content):
-        ...
-
-    def load(self):
-        self.load_with(self.read())
-    
-    def save(self):
-        self.file_path.parent.mkdir(parents=True, exist_ok=True)
-        self.file_path.write_text(json.dumps(self, indent=2))
-    
-    def __repr__(self):
-        return f"JSONResource(file_path={self.file_path})"
-
-class DictResource(JSONResource, dict):
-    def load_with(self, content: dict):
-        self.update(content)
-
-class ListResource(JSONResource, list):
-    def load_with(self, content: list):
-        self.extend(content)
-
-
 class BandwidthMeter:
     """Download bandwidth tracker with moving average."""
     def __init__(self, window_size: int = 20):
@@ -209,28 +175,6 @@ class DownloadResult:
     content_length: int = 0
     already_downloaded: bool = False
 
-@dataclass()
-class LicenseResult:
-    # https://.../article/view/xxx/yyy
-    url: str
-
-    # https://creativecommons.org URLs
-    licenses: list[str]
-
-    def is_acceptable(self) -> bool:
-        versions = ["4.0"]
-        variants = ["by", "by-sa", "by-nc", "by-nc-sa"]
-        return any(
-            f"{variant}/{version}" in license
-            for license in self.licenses for variant in variants for version in versions
-        )
-
-def _cc_ident(url: str) -> str:
-    return urlparse(url).path.removesuffix('/')
-
-def cc_right_in_licenses(right: str, licenses: list[str]) -> bool:
-    ident = _cc_ident(right)
-    return any(_cc_ident(license) == ident for license in licenses)
 
 class DownloadTracker(tqdm_asyncio):
     def __init__(self, iterable=None, *args, **kwargs):

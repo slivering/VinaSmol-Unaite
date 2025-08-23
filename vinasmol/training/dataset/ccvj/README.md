@@ -12,23 +12,35 @@ This notebook should create the file `./data/vjol/records/api_urls.json`.
 
 ### Download the papers
 
-The [main script](./__main__.py) will download the papers, process the PDFs and save the newly created dataset to be used for SmolLM Vietnamese training data. You can launch the script with the following Python command:
+The [download script](./download.py) will download the papers metadata, look up their licenses and download the files. You can launch the script with the following Python command:
 
 ```bash
-python -m vjol --simultaneous-downloads 8
+python -m download --simultaneous-downloads 8
 ```
 
-Downloading metadata and the papers can take a few hours. Expect around 50GB of PDF downloads for approximately 100M Vietnamese tokens. Conversion to Markdown should take a few days on a single-GPU machine.
+Downloading metadata and papers can take a few hours. Expect around 50GB of PDF downloads. 
 
 The script will resume where it left off if you execute it a second time.
 
 ### Compress the PDFs
 
+We compress the PDFs that are not scanned in order to free some disk space and make conversion more efficient.
+
 You need the [GhostScript](https://www.ghostscript.com) command (`gs`) available on your `PATH` environment variable.
 
 ```bash
-python compress_pdfs.py data/vjol/pdf
+python -m compress_pdfs data/vjol/pdf  --logging-dir logs
 ```
+
+### Convert the PDFs
+
+The [conversion script](./convert.py) will process the PDFs, save the newly created dataset and upload it to HuggingFace.
+
+```bash
+python -m convert
+```
+
+Conversion to Markdown should take a few days on a single-GPU machine.
 
 ## Licenses
 
