@@ -6,23 +6,29 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "accelerate",
+    "aiohttp",
+    "certifi",
     "datasets",
     "datatrove[io,processing,cli]>=0.6",
     "diskcache",
     "ftfy",
     "gguf",
     "jsonlines",
+    "loguru",
     "matplotlib",
     "pandas",
     "pypandoc",
     "python-dotenv",
     "pyvi",
     "rensa",
+    "requests",
     "seaborn",
     "sentencepiece",
     "spacy",
+    "sickle",
     "torch",
     "transformers",
+    "typer",
 ]
 
 [dependency-groups]
