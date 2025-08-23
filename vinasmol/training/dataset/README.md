@@ -22,7 +22,7 @@ The [SmolLM Corpus](https://huggingface.co/datasets/HuggingFaceTB/smollm-corpus)
 
 #### In-house datasets
 
-Wee compile a dataset of Vietnamese academic papers. More information [here](./vjol/README.md).
+Wee compile a dataset of Vietnamese academic papers. More information [here](./ccvj/README.md).
 
 ### Training budget
 
@@ -33,11 +33,6 @@ We plan to continue the pretraining of SmolLM2 on around 2B training tokens, as 
 
 - **Vietnamese literature with a permissive license** (ebooks, fiction works, public domain works…) The [National Library of Vietnam](http://nlv.gov.vn/) has a [digital library](http://dlib.nlv.gov.vn/) which used to host such books + doctoral theses, but it is not accessible via Internet right now…
     - [vnthuquan.net](http://vnthuquan.net) is the underlying source of the 10000 Vietnamese books dataset on [HuggingFace](https://huggingface.co/datasets/thailevann/10000_Vietnamese_Books) and on [archive.org](https://archive.org/details/vnthuquan), but copyright is not entirely clear for editions of the website before 2006. We could filter works that are guaranteed to be in public domain using the publication date and possibly the author's date of death if famous.
-- **Research publications in Vietnamese** exist and can be found on open-access websites such as [Vietnam Journals OnLine](https://vjol.info.vn/) (only publications in Vietnamese language) and [SemanticScholar](https://www.semanticscholar.org/) (can’t filter by language easily).
-    - There is no dataset for VJOL and while the site’s archives can be scraped, this represents significant work.
-    - SemanticScholar provides an English-only dataset ([S2ORC](https://huggingface.co/datasets/sentence-transformers/s2orc)). Reproducing an equivalent dataset for Vietnamese will require access to the [API](https://api.semanticscholar.org/api-docs/graph) and clever search techniques for language filtering.
-    - PDF preprocessing can be done with a tool such a https://github.com/allenai/science-parse
-
 
 ## Data preparation
 

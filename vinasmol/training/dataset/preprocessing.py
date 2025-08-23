@@ -153,7 +153,7 @@ class DatasetNames(StrEnum):
     bkai_news_corpus = "bkai-foundation-models/BKAINewsCorpus"
     vbpl = "doanhieung/vbpl"
     mtet = "phongmt184172/mtet"
-    vjol = "vjol" # In-house dataset
+    ccvj = "ccvj" # In-house dataset
 
     _IDS = {}
     _GLOBAL_ID_COUNTER = 0
@@ -189,7 +189,7 @@ class DatasetNames(StrEnum):
                 cls.bkai_news_corpus,
                 cls.vbpl,
                 cls.mtet,
-                cls.vjol,
+                cls.ccvj,
             },
             LUCIE.name: set(cls.__members__.values())
         }
@@ -215,7 +215,7 @@ class DatasetNames(StrEnum):
             cls.bkai_news_corpus,
             cls.vbpl,
             cls.mtet,
-            cls.vjol,
+            cls.ccvj,
         }
         cls.CODE = {
             cls.lucie_training_code,
@@ -526,11 +526,11 @@ class NormalizeCols:
         )
     
     @staticmethod
-    def vjol(row: dict) -> dict:
+    def ccvj(row: dict) -> dict:
         # TODO
         raise NotImplementedError
         return dict(
-            id=DatasetNames.vjol.generate_row_id(),
+            id=DatasetNames.ccvj.generate_row_id(),
             text=row['text'],
-            metadata=DatasetNames.vjol.origin_metadata(),
+            metadata=DatasetNames.ccvj.origin_metadata(),
         )

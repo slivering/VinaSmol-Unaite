@@ -10,8 +10,8 @@ import typer
 from . import DATA_DIR, PDF_DOWNLOAD_DIR, JournalId, RecordMetadata
 from .resource import ListResource
 
-OUT_DATASET_DIR = DATA_DIR / "vjol" / "parquet"
-REPO_ID = "vjol"
+OUT_DATASET_DIR = DATA_DIR / "ccvj" / "parquet"
+REPO_ID = "ccvj"
 
 @dataclass
 class ConversionResult:
@@ -130,7 +130,7 @@ def process_papers(processor: PaperProcessor, pdf_dir: Path) -> dict[Path, Path]
     logger.warning("{} PDFs couldn't be converted.", len(failures))
     return pdf_to_md
 
-def compile_and_load_vjol(
+def compile_and_load_ccvj(
         records: dict[JournalId, ListResource[RecordMetadata]],
         pdf_to_md: dict[Path, Path],
         dataset_dir: Path = OUT_DATASET_DIR,
@@ -156,6 +156,6 @@ def main(
     pdf_to_md = process_papers(processor, pdf_dir)
 
     # TODO: upload to HuggingFace if not created, otherwise load_dataset the uploaded version
-    #downloader = VjolDownloader(...)
-    #dataset = compile_and_load_vjol(downloader.records, pdf_to_md, streaming=True)
+    #downloader = CCVJDownloader(...)
+    #dataset = compile_and_load_ccvj(downloader.records, pdf_to_md, streaming=True)
     #dataset.push_to_hub(repo_id, private=True)

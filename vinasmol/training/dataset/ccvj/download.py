@@ -39,7 +39,7 @@ SIMULTANEOUS_DOWNLOADS = 4
 USER_AGENT = "vinasmol-training"
 
 VJOL_BASE_URL = "https://vjol.info.vn/index.php"
-LOGFILE = DATA_DIR / "vjol" / "vjol.log"
+LOGFILE = DATA_DIR / "ccvj" / "ccvj.log"
 
 _LICENSE_RE = re.compile(
     r'"(https?://creativecommons\.org/(?:licenses|publicdomain)/(?:[a-z0-9/\.-])+)"'
@@ -56,18 +56,16 @@ def _Sickle_request(self, kwargs):
     return self.session.post(self.endpoint, data=kwargs, **self.request_args)
 
 
-class VjolDownloader:
+class CCVJDownloader:
     def __init__(
             self,
-            base_url: str,
             pdf_dir: Path,
             records_dir: Path = RECORDS_DOWNLOAD_DIR,
             simultaneous_downloads: int = SIMULTANEOUS_DOWNLOADS,
             user_agent: str = "vinasmol-training",
             force_refresh_records: bool = False,
+            vjol_base_url: str = VJOL_BASE_URL,
         ):
-        self.base_url = base_url
-
         self.pdf_dir = Path(pdf_dir)
         self.pdf_dir.mkdir(parents=True, exist_ok=True)
         self.records_dir = Path(records_dir)
@@ -76,6 +74,7 @@ class VjolDownloader:
         self.simultaneous_downloads = simultaneous_downloads
         self.user_agent = user_agent
         self.force_refresh_records = force_refresh_records
+        self.vjol_base_url = vjol_base_url
 
         self.api_urls: DictResource[JournalId, Url] = DictResource(
             file_path = self.records_dir / "api_urls.json"
@@ -103,7 +102,6 @@ class VjolDownloader:
         """List the journals made available by VJOL and participying publishers.
         
         Args:
-            base_url (str): the VJOL base URL.
             session (Session): a requests.Session object.
 
         Returns:
@@ -112,15 +110,15 @@ class VjolDownloader:
         """
         # NOTE: unfortunately GET https://vjol.info.vn/api/v1/issues/ is broken,
         # so we have to scrape the list
-        with auto_patch_ssl_verification(self.base_url, session):
-            r = session.get(self.base_url)
+        with auto_patch_ssl_verification(self.vjol_base_url, session):
+            r = session.get(self.vjol_base_url)
         
         html_content = r.text
 
         # https://vjol.info.vn/index.php/index/oai is a superset of all the journals on VJOL
         # FIXME: this creates a mega-journal which should be split later on
         vjol_apis = {
-            "vjol.info.vn_index": f"{self.base_url}/index/oai"
+            "vjol.info.vn_index": f"{self.vjol_base_url}/index/oai"
         }
         
         # Sometimes VJOL links to other websites with a different journal identifier
@@ -152,10 +150,10 @@ class VjolDownloader:
         return vjol_apis | external_apis
 
     def download_api_urls(self) -> DictResource[JournalId, Url]:
-        """Download the VJOL journal API urls to the records directory as `api_urls.json`.
+        """Download the journal API urls to the records directory as `api_urls.json`.
         
         Returns:
-            api_urls (JSONDictResource): the OAI-PMH API urls for each VJOL journal.
+            api_urls (JSONDictResource): the OAI-PMH API urls for each journal.
         """
         fp = self.api_urls.file_path
         if self.api_urls and not self.force_refresh_records:
@@ -183,7 +181,7 @@ class VjolDownloader:
 
     @classmethod
     def get_records(cls, oai_api_url: Url, session: Session) -> list[RecordMetadata]:
-        """Get the metadata for every journal record in VJOL.
+        """Get the metadata for every record of the journal.
 
         Args:
             oai_api_url (Url): the OAI base URL.
@@ -287,7 +285,7 @@ class VjolDownloader:
         return metadata
 
     def download_records_metadata(self) -> dict[JournalId, ListResource[RecordMetadata]]:
-        """Get all of the records available on VJOL and downloads their metadata.
+        """Get all of the records available on the OAI endpoints and downloads their metadata.
 
         Returns:
             records (dict[JournalId, list[RecordMetadata]]): the records by journal.
@@ -310,7 +308,7 @@ class VjolDownloader:
                 else:
                     time.sleep(self._sample_ratelimit_duration())
                     
-                    journal_records = VjolDownloader.get_records(api_url, session=session)
+                    journal_records = CCVJDownloader.get_records(api_url, session=session)
                     self.records[journal].load_with(journal_records)
                     self.records[journal].save()
 
@@ -513,7 +511,9 @@ class VjolDownloader:
         return self.licenses
 
     async def download_records_as_pdf(self) -> list[Path]:
-        """Downloads all of the PDFs from the downloaded VJOL records metadata.
+        """Downloads the PDFs from the downloaded records metadata.
+
+        Only the papers with compatible licenses are downloaded.
 
         Returns:
             list[Path]: the list of the downloaded PDF files.
@@ -601,7 +601,7 @@ class VjolDownloader:
             logger.error("{} files with incorrect content type", len(not_success))
     
     def download_dataset_pdfs(self) -> list[Path]:
-        """Downloads all of the PDFs of the VJOL records.
+        """Downloads all of the PDFs from the OAI records.
 
         Returns:
             list[Path]: the list of the downloaded PDF files.
@@ -628,13 +628,13 @@ def main(
     ):
     setup_logging(logger, logfile)
 
-    downloader = VjolDownloader(
-        base_url=VJOL_BASE_URL,
+    downloader = CCVJDownloader(
         pdf_dir=pdf_dir,
         records_dir=records_dir,
         simultaneous_downloads=simultaneous_downloads,
         user_agent=user_agent,
         force_refresh_records=force_refresh_records,
+        vjol_base_url=VJOL_BASE_URL,
     )
     with logging_redirect_tqdm():
         downloader.download_dataset_pdfs()

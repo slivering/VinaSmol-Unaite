@@ -8,7 +8,7 @@ We compile a new dataset by downloading 12000 academic papers from 18 permissive
 
 To download the [OAI-PMH](https://www.openarchives.org/pmh/) API endpoints for harvesting, run the Jupyter notebook `doaj_vn.ipynb`.
 
-This notebook should create the file `./data/vjol/records/api_urls.json`.
+This notebook should create the file `./data/vjol/records/api_urls.json`, which contains one endpoint per journal.
 
 ### Download the papers
 
