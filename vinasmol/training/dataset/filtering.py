@@ -1,7 +1,7 @@
 import re
 
-from datatrove.executor.local import LocalPipelineExecutor
 from datatrove.data import Document
+from datatrove.executor.local import LocalPipelineExecutor
 from datatrove.pipeline.filters.base_filter import BaseFilter
 from datatrove.pipeline.filters import (
     C4BadWordsFilter,
@@ -221,7 +221,7 @@ main_processing_executor = LocalPipelineExecutor(
             # However, for consistency with the next filters, we restrict to only one language
             # as English.
             # TODO: exclude mtet and add it in the end, split VJOL depending on language
-            ['vie_Latn'], # GlotLID -> vie_Latn, FT176LID -> vi
+            [Languages.vietnamese__latn], # Compatible with GlotLID, not with FT176LID
             language_threshold=0.65,
             backend="glotlid", # FIXME: is the LID duplicated across workers?
             exclusion_writer=JsonlWriter(f"{FILTERING_REMOVED_DIR}/2_non_vietnamese"),
@@ -297,8 +297,8 @@ main_processing_executor = LocalPipelineExecutor(
 
         JsonlWriter(output_intermediate_1),
     ],
-    tasks=64,
-    workers=8,
+    tasks=16,
+    workers=16,
     logging_dir=f"{LOGGING_DIR}/base_processing/{DUMP_TO_PROCESS}",
 )
 
@@ -326,7 +326,7 @@ document_dedup_stage = LocalPipelineExecutor(
     depends=main_processing_executor,
 )
 
-tasks_sequence_dedup = 64
+tasks_sequence_dedup = 16
 
 sequence_dedup_stage_1 = LocalPipelineExecutor(
     pipeline=[
@@ -336,7 +336,7 @@ sequence_dedup_stage_1 = LocalPipelineExecutor(
             tokenizer_name_or_path=VIETNAMESE_TOKENIZER,
         ),
     ],
-    workers=16,
+    workers=tasks_sequence_dedup,
     tasks=tasks_sequence_dedup,
     logging_dir=f"{LOGGING_DIR}/es/1/{DUMP_TO_PROCESS}",
     depends=document_dedup_stage,
@@ -417,8 +417,8 @@ final_stage = LocalPipelineExecutor(
         PIIFormatter(),
         JsonlWriter(f"{MAIN_OUTPUT_DIR}/{DUMP_TO_PROCESS}/deduped"),
     ],
-    tasks=64,
-    workers=16,
+    tasks=tasks_sequence_dedup,
+    workers=tasks_sequence_dedup,
     logging_dir=f"{LOGGING_DIR}/es/3/{DUMP_TO_PROCESS}",
     depends=external_dedup_stage_3,
 )
