@@ -5,12 +5,8 @@ from typing_extensions import Annotated
 
 from datasets import Dataset, load_dataset
 from loguru import logger
-from tokenizers.implementations import SentencePieceBPETokenizer
-from transformers import (
-    PreTrainedTokenizerBase,
-    PreTrainedTokenizerFast,
-    PreTrainedModel,
-)
+from tokenizers.implementations import BaseTokenizer, SentencePieceBPETokenizer
+from transformers import PreTrainedTokenizerBase
 import typer
 
 from vinasmol.hfmodel import BASE_MODEL # SMOLLM2
@@ -75,10 +71,12 @@ def train_vietnamese_tokenizer(
         vocab_size: int = VIETNAMESE_VOCAB_SIZE,
         dropout: float = DROPOUT_RATE,
         limit_alphabet: int = LIMIT_VIETNAMESE_ALPHABET,
-        min_frequency: int = 5,
-    ) -> PreTrainedTokenizerBase:
+        min_frequency: int = 1000,
+    ) -> BaseTokenizer:
     tokenizer = SentencePieceBPETokenizer(
-        unk_token="<unk>",
+        # The unknown token from SmolLM2
+        # TODO: don't hardcode this
+        unk_token="<|endoftext|>",
         add_prefix_space=True,
         dropout=dropout, # Sailor paper: only during "finetuning"???
         fuse_unk=False,
@@ -89,37 +87,29 @@ def train_vietnamese_tokenizer(
         min_frequency=min_frequency,
         # We don't need to add the special tokens since only the new tokens
         # will be added to SmolLM's tokenizer
-        special_tokens=["<unk>"],
+        special_tokens=["<|endoftext|>"],
         initial_alphabet=VIETNAMESE_LETTERS,
         limit_alphabet=limit_alphabet,
         show_progress=True,
     )
-    return PreTrainedTokenizerFast(tokenizer)
+    return tokenizer
 
 def merge_tokenizers(
         base_tokenizer: PreTrainedTokenizerBase,
-        new_tokenizer: PreTrainedTokenizerBase,
+        new_tokenizer: BaseTokenizer,
     ) -> int:
     """Merge two tokenizer into a base tokenizer.
 
     Args:
         base_tokenizer (PreTrainedTokenizerBase): The pretrained tokenizer to extend.
-        new_tokenizer (PreTrainedTokenizerBase): The tokenizer trained on the new language.
+        new_tokenizer (BaseTokenizer): The tokenizer trained on the new language.
 
     Returns:
         int: The number of new tokens.
     """
-    return base_tokenizer.add_tokens(new_tokenizer.get_vocab())
-
-
-def initialize_new_embeddings(
-        model: PreTrainedModel,
-        updated_tokenizer: PreTrainedTokenizerBase,
-    ):
-    # Hewitt initialization by default: https://nlp.stanford.edu/~johnhew/vocab-expansion.html
-    model.resize_token_embeddings(len(updated_tokenizer), mean_resizing=True)
-
-
+    # Only add the new tokens
+    new_tokens = set(new_tokenizer.get_vocab()) - set(base_tokenizer.get_vocab())
+    return base_tokenizer.add_tokens(list(new_tokens))
 
 def main(
         dataset_dirs: Annotated[
@@ -154,26 +144,23 @@ def main(
         dropout=dropout_rate,
         limit_alphabet=limit_vietnamese_alphabet,
     )
-    logger.info("New tokenizer vocabulary size: {}", len(new_tokenizer))
-    new_tokenizer.save_pretrained(
-        save_directory=tokenizer_out_dir,
-        filename_prefix="vietnamese",
-    )
+    logger.info("New tokenizer vocabulary size: {}", new_tokenizer.get_vocab_size())
+    new_tokenizer_path = tokenizer_out_dir / "new_vietnamese_tokenizer.json"
+    new_tokenizer.save(f"{new_tokenizer_path}")
 
     base_tokenizer = BASE_MODEL.load_tokenizer()
     logger.info("Base tokenizer vocabulary size: {}", len(base_tokenizer))
 
     # Merge into base_tokenizer
     n_added_tokens = merge_tokenizers(base_tokenizer, new_tokenizer)
-    assert n_added_tokens == number_of_added_tokens(BASE_MODEL.load_tokenizer(), base_tokenizer)
+    effective_n_added_tokens = number_of_added_tokens(BASE_MODEL.load_tokenizer(), base_tokenizer)
+    assert n_added_tokens == effective_n_added_tokens
 
     logger.info("Added {} new tokens", n_added_tokens)
 
-    # FIXME: will save_pretrained save the newly added tokens???
-    base_tokenizer.save_vocabulary(
-        save_directory=tokenizer_out_dir,
-        filename_prefix="merged",
-    )
+    # TODO: make the added tokens like part of the vocabulary
+    # Performance impact on tokenizer loaded with GPT2TokenizerFast.from_pretrained??
+    base_tokenizer.save_pretrained(f"{tokenizer_out_dir / 'merged'}")
 
     logger.info("Saved tokenizer states in {}", tokenizer_out_dir)
 

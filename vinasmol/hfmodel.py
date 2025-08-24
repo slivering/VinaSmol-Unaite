@@ -27,6 +27,11 @@ SMOLLM2 = HFModel(
     tokenizer="HuggingFaceTB/SmolLM2-360M",
 )
 
+ENVIT5 = HFModel(
+    name="VietAI/envit5-translation",
+    tokenizer="VietAI/envit5-translation",
+)
+
 # For Vietnamese tokenization when processing the dataset
 VINALLAMA_7B = HFModel(
     name="vilm/vinallama-7b-chat",

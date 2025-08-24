@@ -25,11 +25,14 @@ We train a new tokenizer on Vietnamese corpora and extend the base tokenizer wit
 
 #### Embedding initialization
 
-For the input embeddings of the new Vietnamese tokens, we use the average embeddings of their subword tokens. Alternatively, we could initialize them to the embedding of their English translation (possibly a sentence), using an auxiliary translation model such as [PhoBERT](https://huggingface.co/vinai/phobert-base), plus a random normal noise.
+For the input embeddings of the new Vietnamese tokens, we use the average embeddings of their subword tokens (default in the `tokenizers` library, as in [Hewitt](https://nlp.stanford.edu/~johnhew/vocab-expansion.html)). Whenever possible, we use a convex combination of the initialized embedding and the embedding of their translation using [EnViT5-base](https://huggingface.co/VietAI/envit5-translation).
 
-For the output embeddings of the new tokens, the EEVE method suggests to initialize them with the embeddings of the first subword token. While this approach makes sense when the base model was trained on a bit of Vietnamese, SmolLM has about zero Vietnamese completion capabilities, and therefore such harmonization strategy might not be helpful.
+Since SmolLM2 360M has tied embeddings due to its size, we simply propagate the input embeddings initialization to the output embeddings. This differs from the output embeddings initialization in EEVE.
 
-Initial experiments should guide us towards the best initialization method.
+<details>
+<summary>Read more...</summary>
+For the output embeddings of the new tokens, Kim et al. suggest to initialize them with the embeddings of the first subword token. This harmonization approach works if the base model has not its embeddings tied and has already some Vietnamese completion capabilities.
+</details>
 
 ### Multi-stage training
 
@@ -38,6 +41,14 @@ The different training stages used in EEVE are depicted below.
 ![EEVE pipeline](https://huggingface.co/yanolja/EEVE-Korean-10.8B-v1.0/resolve/main/EEVE_figure.png)
 
 Refer to the [original paper](https://arxiv.org/abs/2402.14714v1) for more information.
+
+Since SmolLM2 360M has tied embeddings, we only perform stages 3, 4, 6, 7 from the original EEVE pipeline.
+
+### Training framework
+
+We use [litgpt](https://github.com/Lightning-AI/litgpt) for continued pretraining, which supports SmolLM2.
+
+In order to follow the multi-stage training of EEVE, we customize the [continued pretraining recipe of litgpt](https://github.com/Lightning-AI/litgpt/blob/main/tutorials/pretrain.md#continued-pretraining-on-custom-data) by freezing the adequate parameters before the training starts.
 
 ### ReLoRA
 
@@ -51,11 +62,11 @@ Implementations (not reviewed yet):
 - https://github.com/ElleLeonne/Lightning-ReLoRA
 - https://github.com/axolotl-ai-cloud/axolotl/blob/main/examples/llama-2/relora.yml
 
-How to integrate both EEVE and ReLoRA into existing training frameworks remains very unclear. Custom training code is very likely to be necessary, therefore a PyTorch Lightning-based solution could be more suitable for customization. Otherwise we should fork a training framework to add support for specific parameter freezing, if necessary.
+How to integrate both EEVE and ReLoRA into existing training frameworks remains very unclear. Custom training code is very likely to be necessary, therefore a PyTorch Lightning-based solution could be more suitable for customization.
 
 ### Hyperparameters
 
-Refer to https://huggingface.co/blog/smollm and https://arxiv.org/abs/2502.02737v1 for experimental tuning
+Refer to https://huggingface.co/blog/smollm and the [SmolLM2 paper](https://arxiv.org/abs/2502.02737v1) for hyperparameter tuning.
 
 Similar to [Sailor 7B](https://arxiv.org/abs/2404.03608), we adjust the language mixture proportions and the learning rate based on initial experiments.
 
@@ -74,3 +85,7 @@ We follow the procedure outlined by [Gao et al.](https://arxiv.org/abs/2410.0266
 Using a larger base model such as [Lucie 7B](https://huggingface.co/OpenLLM-France/Lucie-7B-Instruct-v1.1) may improve the model capabilities and degree of multilinguality.
 
 Techniques such as [depth upscaling](https://planetbanatt.net/articles/modelmerging.html#orgf613f37) used by [SOLAR 10.7B](https://arxiv.org/abs/2312.15166) could be used to increase the size of the model and scale to a higher number of parameters. However it's unclear whether depth upscaling coud prove to be useful for very small models.
+
+## Citations
+
+- [litgpt, 2023](https://github.com/Lightning-AI/litgpt)

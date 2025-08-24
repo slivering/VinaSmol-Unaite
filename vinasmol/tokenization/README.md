@@ -50,3 +50,16 @@ We believe our approach is valid for the following reasons:
 
 1. SmolLM has no cross-lingual alignment between English and Vietnamese, so the negative impacts of vocabulary extension outlined by [Zhao et al.](https://arxiv.org/abs/2401.01055) and in [Sailor](https://arxiv.org/abs/2404.03608) are unlikely to apply.
 2. We employ the [EEVE](https://arxiv.org/abs/2402.14714v1) method for vocabulary extension, which is designed to avoid friction with the introduction fo a new language in the model training.
+
+## Adjustments
+
+The EEVE methodology requires several modifications for VinaSmol.
+
+1. There is some overlap between Vietnamese tokens and English tokens (e.g "can", "a"...), which can be determined with a Vietnamese dictionary, for instance. Therefore, all of the Vietnamese token embeddings should be trained. This could include unaccentuated tokens.
+2. The embedding initialization will differ from EEVE-Korean. [More details](../training/README.md#embedding-initialization).
+
+## Citations
+
+- [Efficient and Effective Vocabulary Expansion Towards Multilingual Large Language Models](https://arxiv.org/abs/2402.14714v1)
+- [MTet: Multi-domain Translation for English and Vietnamese](https://doi.org/10.48550/arxiv.2210.05610)
+- [vietnamese-wordlist](https://github.com/duyet/vietnamese-wordlist)
