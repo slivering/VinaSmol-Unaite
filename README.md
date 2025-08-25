@@ -1,6 +1,6 @@
 # VinaSmol: Extending SmolLM with Vietnamese
 
-VinaSmol is a proof-of-concept project that aims to add Vietnamese language capabilities and knowledge to [SmolLM 360M](https://huggingface.co/HuggingFaceTB/SmolLM-360M).
+VinaSmol is a proof-of-concept project that aims to add Vietnamese language capabilities and knowledge to [SmolLM 360M](https://huggingface.co/HuggingFaceTB/SmolLM2-360M-Instruct).
 
 Our approach aims to demonstrate that efficient pretraining methods on a medium-sized Vietnamese dataset (less than 10B tokens) can effectively integrate a new language into an LLM that was not trained on it.
 

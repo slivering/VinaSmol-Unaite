@@ -36,10 +36,6 @@ Adapting the base tokenizer for Vietnamese yields the following improvements:
 
 The SmolLM tokenizer is trained on English with a vocabulary size of 49152 and a window size of 8192.
 
-```python
-special_tokens={'bos_token': '<|endoftext|>', 'eos_token': '<|endoftext|>', 'unk_token': '<|endoftext|>', 'additional_special_tokens': ['<|endoftext|>', '<|im_start|>', '<|im_end|>', '<repo_name>', '<reponame>', '<file_sep>', '<filename>', '<gh_stars>', '<issue_start>', '<issue_comment>', '<issue_closed>', '<jupyter_start>', '<jupyter_text>', '<jupyter_code>', '<jupyter_output>', '<jupyter_script>', '<empty_output>']}
-```
-
 We train a new tokenizer on a subset of our training Vietnamese corpora ([details](../training/dataset/README.md)). We add about 10000 new tokens to the base tokenizer, filter rare tokens and add accentuated letters if not present.
 
 Vietnamese tokenization differs from Latin language tokenization since space is not word separator in Vietnamese. Therefore, we use a SentencePiece tokenizer, which is language-agnostic. Additionally, we enable BPE-Dropout to improve robustness against different input formats.

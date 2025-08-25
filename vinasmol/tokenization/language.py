@@ -2,6 +2,7 @@ import pandas as pd
 from transformers import AutoTokenizer, AutoModelForSequenceClassification, pipeline
 from ..hfmodel import HFModel
 
+# TODO: consider using GlotLID FastText classifier
 classification_model_name = 'qanastek/51-languages-classifier'
 classification_tokenizer = AutoTokenizer.from_pretrained(classification_model_name)
 classification_model = AutoModelForSequenceClassification.from_pretrained(classification_model_name)

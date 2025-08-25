@@ -23,7 +23,7 @@ LUCIE = HFModel(
 )
 
 SMOLLM2 = HFModel(
-    name="HuggingFaceTB/SmolLM2-360M",
+    name="HuggingFaceTB/SmolLM2-360M-Instruct",
     tokenizer="HuggingFaceTB/SmolLM2-360M",
 )
 

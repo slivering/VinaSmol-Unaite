@@ -27,11 +27,11 @@ We train a new tokenizer on Vietnamese corpora and extend the base tokenizer wit
 
 For the input embeddings of the new Vietnamese tokens, we use the average embeddings of their subword tokens (default in the `tokenizers` library, as in [Hewitt](https://nlp.stanford.edu/~johnhew/vocab-expansion.html)). Whenever possible, we use a convex combination of the initialized embedding and the embedding of their translation using [EnViT5-base](https://huggingface.co/VietAI/envit5-translation).
 
-Since SmolLM2 360M has tied embeddings due to its size, we simply propagate the input embeddings initialization to the output embeddings. This differs from the output embeddings initialization in EEVE.
+Since SmolLM2-360M has tied embeddings due to its size, we simply propagate the input embeddings initialization to the output embeddings. This differs from the output embeddings initialization in EEVE.
 
 <details>
 <summary>Read more...</summary>
-For the output embeddings of the new tokens, Kim et al. suggest to initialize them with the embeddings of the first subword token. This harmonization approach works if the base model has not its embeddings tied and has already some Vietnamese completion capabilities.
+For the output embeddings of the new tokens, Kim et al. suggest to initialize them with the embeddings of the first subword token. This harmonization approach works if the base model has not its embeddings tied and has already some Vietnamese completion capabilities. Furthermore, it would be harmful for an English/Vietnamese model since most of the Vietnamese tokens start with a Latin consonant, which is already in the English alphabet. Single-consonant token embeddings already have a value in SmolLM2 and most of their information is useful for English completion, not Vietnamese completion.
 </details>
 
 ### Multi-stage training
@@ -42,7 +42,7 @@ The different training stages used in EEVE are depicted below.
 
 Refer to the [original paper](https://arxiv.org/abs/2402.14714v1) for more information.
 
-Since SmolLM2 360M has tied embeddings, we only perform stages 3, 4, 6, 7 from the original EEVE pipeline.
+Since SmolLM2-360M has tied embeddings, we only perform stages 3, 4, 6, 7 from the original EEVE pipeline.
 
 ### Training framework
 
@@ -56,7 +56,7 @@ In order to pretrain the model on even more tokens with limited resources, [ReLo
 
 We can use ReLoRA during stages 6 and 7 of the multi-stage training, where the number of trainable parameters increases with the transformer layers.
 
-While ReLoRA may be unnecessary for very small LLMs such as [SmolLM2-360M](https://huggingface.co/HuggingFaceTB/SmolLM2-360M), such an approach would be crucial for training larger models such as [Lucie-7B](https://huggingface.co/OpenLLM-France/Lucie-7B-Instruct-v1.1).
+While ReLoRA may be unnecessary for very small LLMs such as [SmolLM2-360M](https://huggingface.co/HuggingFaceTB/SmolLM2-360M-Instruct), such an approach would be crucial for training larger models such as [Lucie-7B](https://huggingface.co/OpenLLM-France/Lucie-7B-Instruct-v1.1).
 
 Implementations (not reviewed yet):
 - https://github.com/ElleLeonne/Lightning-ReLoRA
