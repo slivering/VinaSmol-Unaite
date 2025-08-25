@@ -30,28 +30,25 @@ from tldextract import TLDExtract
 
 from vinasmol.training.dataset.preprocessing import DatasetNames
 
-from ...hfmodel import VINALLAMA_7B
-from . import DATA_DIR, DATA_DIR_VI
-from .constants import (
+from vinasmol.hfmodel import VINALLAMA_7B
+from . import (
+    DATA_DIR_VI, MAIN_OUTPUT_DIR, FILTERING_OUTPUT_DIR, FILTERING_REMOVED_DIR,
+    ES_DIR, LOGGING_DIR, STATS_DIR, SEED,
+)
+from ..constants import (
     STOP_WORDS,
     FLAGGED_WORDS_SAILCRAFT,
 )
-from .deduplication import ESComputeRangesExternal, RensaBuildIndex, RensaDeduplicate
-from .normalization import Formatter
+from ..deduplication import ESComputeRangesExternal, RensaBuildIndex, RensaDeduplicate
+from ..normalization import Formatter
 
 VIETNAMESE_TOKENIZER = VINALLAMA_7B.tokenizer
 
 top_k_config = TopKConfig(top_k_groups=["fqdn"], top_k=10_000)
 
-MAIN_OUTPUT_DIR = DATA_DIR
-FILTERING_OUTPUT_DIR = (MAIN_OUTPUT_DIR / "filtering").resolve()
-FILTERING_REMOVED_DIR = (FILTERING_OUTPUT_DIR / "removed").resolve()
-ES_DIR = MAIN_OUTPUT_DIR / "es"
-LOGGING_DIR = MAIN_OUTPUT_DIR / "logs"
-STATS_DIR = MAIN_OUTPUT_DIR / "stats"
+
 
 DUMP_TO_PROCESS = "vi-all"
-SEED = 20250801
 
 DOMAIN_WHITELIST = [
     "wikipedia.org",
