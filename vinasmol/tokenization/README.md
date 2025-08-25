@@ -19,6 +19,7 @@ The merged tokenizer and the SmolLM weights with extended vocabulary can be foun
 directory specified by `--tokenizer-out-dir`.
 
 > [!NOTE] Terminology
+> 
 > We refer as *new* the tokenizer trained anew on Vietnamese corpora, with of vocabulary size specified by `--vietnamese-vocab-size`.
 > We refer as *merged* the tokenizer with the previous English vocabulary and the added Vietnamese vocabulary from the *new* tokenizer. The number of added tokens is **lower** than `--vietnamese-vocab-size`.
 

@@ -9,9 +9,9 @@ Details [here](./dataset/README.md).
 
 ## Framework
 
-TODO: depends on the machine and the base model. 3D parallelism is crucial if the model is large. Possibly DeepSpeed-ZERO for a whole cluster, or something simpler for a single-node setup.
+We use [litgpt](https://github.com/Lightning-AI/litgpt) for continued pretraining, which supports SmolLM2-360M.
 
-EEVE only requires parameter freezing, but ReLoRA might be harder to integrate with existing distributed frameworks.
+In order to follow the multi-stage training of EEVE, we customize the [continued pretraining recipe of litgpt](https://github.com/Lightning-AI/litgpt/blob/main/tutorials/pretrain.md#continued-pretraining-on-custom-data) by freezing the adequate parameters before the training starts.
 
 ## Recipe
 
@@ -43,12 +43,6 @@ The different training stages used in EEVE are depicted below.
 Refer to the [original paper](https://arxiv.org/abs/2402.14714v1) for more information.
 
 Since SmolLM2-360M has tied embeddings, we only perform stages 3, 4, 6, 7 from the original EEVE pipeline.
-
-### Training framework
-
-We use [litgpt](https://github.com/Lightning-AI/litgpt) for continued pretraining, which supports SmolLM2.
-
-In order to follow the multi-stage training of EEVE, we customize the [continued pretraining recipe of litgpt](https://github.com/Lightning-AI/litgpt/blob/main/tutorials/pretrain.md#continued-pretraining-on-custom-data) by freezing the adequate parameters before the training starts.
 
 ### ReLoRA
 
