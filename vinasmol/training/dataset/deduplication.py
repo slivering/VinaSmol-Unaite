@@ -160,6 +160,7 @@ class RensaDeduplicate(BaseFilter):
 
             if actual_jaccard >= self.rensa_index.final_jaccard_threshold:
                 # Keep the item with the smaller original index
+                # TODO: if possible, prioritize older document
                 if document.id < candidate_id:
                     self._to_remove.add(candidate_id)
                 else:

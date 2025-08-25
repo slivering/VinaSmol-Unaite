@@ -231,7 +231,7 @@ class DatasetNames(StrEnum):
             cls.lucie_training_code,
         }
         cls.PLACEHOLDER_URLS = [
-            name.placeholder_url
+            name.placeholder_domain
             for name in cls.__members__.values()
         ]
     
@@ -294,7 +294,7 @@ class DatasetNames(StrEnum):
             return self._id + 1000 * DatasetNames._GLOBAL_ID_COUNTER
     
     @property
-    def placeholder_url(self) -> str:
+    def placeholder_domain(self) -> str:
         """A placeholder URL prefix to use when the dataset has no web sources."""
         return f"https://{self.name.replace('_', '-')}.example"
 
@@ -333,7 +333,7 @@ class NormalizeCols:
             text=row['text'],
             metadata=dict(
                 # Cosmopedia v2 is synthetic data generated from web sources
-                url=f"{DatasetNames.cosmopedia_v2.placeholder_url}/{id}"
+                url=f"{DatasetNames.cosmopedia_v2.placeholder_domain}/{id}"
                 **filter_keys(row, ['audience', 'format', 'seed_data']),
                 **DatasetNames.cosmopedia_v2.origin_metadata(),
             ),
@@ -424,7 +424,7 @@ class NormalizeCols:
             text=NormalizeCols.format_prompt_response(row['inputs'], row['targets']),
             metadata=dict(
                 # FLAN v2 is LLM-generated, so it has no real web source
-                url=f"{DatasetNames.flan_v2.placeholder_url}/{id}",
+                url=f"{DatasetNames.flan_v2.placeholder_domain}/{id}",
                 **filter_keys(
                     row,
                     ['task'],
@@ -454,7 +454,7 @@ class NormalizeCols:
             text=md_content,
             metadata=dict(
                 # TODO: find true URL
-                url=f"{DatasetNames.mathpile_commercial.placeholder_url}/{row['meta']['id']}",
+                url=f"{DatasetNames.mathpile_commercial.placeholder_domain}/{row['meta']['id']}",
                 **filter_keys(row, ['subset']),
                 **DatasetNames.mathpile_commercial.origin_metadata(row['meta']['id']),
             ),
@@ -467,7 +467,7 @@ class NormalizeCols:
             text=row['text'],
             metadata=dict(
                 # Transcripts of conversations. Not web content
-                url=f"{DatasetNames.claire_en.placeholder_url}/{row['id']['idx_row']}",
+                url=f"{DatasetNames.claire_en.placeholder_domain}/{row['id']['idx_row']}",
                 subset=row['extra']['subset'],
                 **DatasetNames.claire_en.origin_metadata(row['id']['idx_row']),
             ),
@@ -511,10 +511,10 @@ class NormalizeCols:
         id = DatasetNames.madlad400.generate_row_id()
         return dict(
             id=id,
-            text=row['text'],
+            text=row['text'].replace(r"\n", "\n"),
             metadata=dict(
                 # Unfortunately, MADLAD-400 has not provided its exact sources
-                url=f"{DatasetNames.madlad400.placeholder_url}/{id}",
+                url=f"{DatasetNames.madlad400.placeholder_domain}/{id}",
                 **DatasetNames.madlad400.origin_metadata()
             ),
         )
@@ -538,7 +538,7 @@ class NormalizeCols:
             text=row['text'],
             metadata=dict(
                 # NOTE: this is an internal URL of the corpus. Only used for URLFilter to accept
-                url=f"{DatasetNames.bkai_news_corpus.placeholder_url}{row['link']}",
+                url=f"{DatasetNames.bkai_news_corpus.placeholder_domain}{row['link']}",
                 date=parse_publication_date(row['publish']).strftime("%Y-%m-%dT%H:%M:%S%z"),
                 **DatasetNames.bkai_news_corpus.origin_metadata(row['id'])
             )
@@ -567,7 +567,7 @@ class NormalizeCols:
         return dict(
             id=id,
             # NOTE: this is an fake internal URL for mTet. Only used for URLFilter to accept
-            url=f"{DatasetNames.mtet.placeholder_url}/{id}",
+            url=f"{DatasetNames.mtet.placeholder_domain}/{id}",
             text=NormalizeCols.format_prompt_response(row['prompt'], row['response']),
             metadata=DatasetNames.mtet.origin_metadata(),
         )
