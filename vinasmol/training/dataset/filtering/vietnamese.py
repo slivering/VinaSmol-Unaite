@@ -55,7 +55,7 @@ DOMAIN_WHITELIST += DatasetNames.PLACEHOLDER_URLS
 # https://huggingface.co/edugp/kenlm/tree/main
 CCNET_PPL_DATASET = "oscar"
 PPL_STAT_NAME = f"ccnet_perplexity_{CCNET_PPL_DATASET}_vi"
-PPL_STAT_DIR = f"{STATS_DIR}/perplexity"
+PPL_STAT_DIR = f"{STATS_DIR}/{CORPUS}"
 PPL_STAT_TOPK_CONFIG = TopKConfig(top_k_groups=["histogram"], top_k=100_000)
 PPL_WHITELIST = [
     "vbpl.vn",
@@ -270,12 +270,12 @@ tasks_sequence_dedup = 16
 final_stage = LocalPipelineExecutor(
     pipeline=[
         JsonlReader(output_intermediate_2),
-        ESRangeRemover(
-            min_doc_words=50,
-            sequence_folder=es_dir_vi,
-            tokenizer_name_or_path=VIETNAMESE_TOKENIZER,
-            language=Languages.vietnamese,
-        ),
+        # ESRangeRemover(
+        #     min_doc_words=50,
+        #     sequence_folder=es_dir_vi,
+        #     tokenizer_name_or_path=VIETNAMESE_TOKENIZER,
+        #     language=Languages.vietnamese,
+        # ),
         DocStats(
             f"{STATS_DIR}/docs",
             top_k_config=top_k_config,
