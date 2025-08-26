@@ -13,6 +13,9 @@ python -m vinasmol.tokenization.training \
     vinasmol/training/dataset/data/deduped/ \
     --tokenizer-out-dir vinasmol/tokenization/data \
     --vietnamese-vocab-size 10000
+python -m vinasmol.tokenization.vocab_extension \
+    vinasmol/tokenization/data/merged \
+    vinasmol/tokenization/data/smollm_extended
 ```
 
 The merged tokenizer and the SmolLM weights with extended vocabulary can be found in the
