@@ -230,42 +230,42 @@ document_dedup_stage = LocalPipelineExecutor(
 
 tasks_sequence_dedup = 16
 
-sequence_dedup_stage_1 = LocalPipelineExecutor(
-    pipeline=[
-        JsonlReader(output_intermediate_2),
-        ESDatasetToSequence(
-            output_folder=es_dir_vi,
-            tokenizer_name_or_path=VIETNAMESE_TOKENIZER,
-        ),
-    ],
-    workers=tasks_sequence_dedup,
-    tasks=tasks_sequence_dedup,
-    logging_dir=f"{LOGGING_DIR}/es/1/{CORPUS}",
-    depends=document_dedup_stage,
-)
+# sequence_dedup_stage_1 = LocalPipelineExecutor(
+#     pipeline=[
+#         JsonlReader(output_intermediate_2),
+#         ESDatasetToSequence(
+#             output_folder=es_dir_vi,
+#             tokenizer_name_or_path=VIETNAMESE_TOKENIZER,
+#         ),
+#     ],
+#     workers=tasks_sequence_dedup,
+#     tasks=tasks_sequence_dedup,
+#     logging_dir=f"{LOGGING_DIR}/es/1/{CORPUS}",
+#     depends=document_dedup_stage,
+# )
 
-sequence_dedup_stage_2 = LocalPipelineExecutor(
-    pipeline=[
-        ESMergeSequences(
-            data_folder=es_dir_vi,
-            tasks_stage_1=tasks_sequence_dedup,
-        ),
-    ],
-    logging_dir=f"{LOGGING_DIR}/es/2/{CORPUS}",
-    depends=sequence_dedup_stage_1,
-)
+# sequence_dedup_stage_2 = LocalPipelineExecutor(
+#     pipeline=[
+#         ESMergeSequences(
+#             data_folder=es_dir_vi,
+#             tasks_stage_1=tasks_sequence_dedup,
+#         ),
+#     ],
+#     logging_dir=f"{LOGGING_DIR}/es/2/{CORPUS}",
+#     depends=sequence_dedup_stage_1,
+# )
 
-external_dedup_stage_3 = LocalPipelineExecutor(
-    pipeline=[
-        ESComputeRangesExternal(
-            length_threshold=100,
-            data_folder=es_dir_vi,
-            num_threads=16,
-        ),
-    ],
-    logging_dir=f"{LOGGING_DIR}/es/2/{CORPUS}",
-    depends=sequence_dedup_stage_2,
-)
+# external_dedup_stage_3 = LocalPipelineExecutor(
+#     pipeline=[
+#         ESComputeRangesExternal(
+#             length_threshold=100,
+#             data_folder=es_dir_vi,
+#             num_threads=16,
+#         ),
+#     ],
+#     logging_dir=f"{LOGGING_DIR}/es/2/{CORPUS}",
+#     depends=sequence_dedup_stage_2,
+# )
 
 final_stage = LocalPipelineExecutor(
     pipeline=[
@@ -311,12 +311,12 @@ final_stage = LocalPipelineExecutor(
         # Possibly use scrubadub for more in-depth cleaning (beware of performance)
         PIIFormatter(),
         JsonlWriter(f"{MAIN_OUTPUT_DIR}/{CORPUS}/deduped"),
-        # TODO: shard and shuffle each of them
+        # TODO: shard each of them into their original datasets
     ],
     tasks=tasks_sequence_dedup,
     workers=tasks_sequence_dedup,
     logging_dir=f"{LOGGING_DIR}/es/3/{CORPUS}",
-    depends=external_dedup_stage_3,
+    depends=document_dedup_stage,
 )
 
 
@@ -324,9 +324,9 @@ final_stage = LocalPipelineExecutor(
 def main():
     main_processing_executor.run()
     document_dedup_stage.run()
-    sequence_dedup_stage_1.run()
-    sequence_dedup_stage_2.run()
-    external_dedup_stage_3.run()
+    # sequence_dedup_stage_1.run()
+    # sequence_dedup_stage_2.run()
+    # external_dedup_stage_3.run()
     final_stage.run()
 
 if __name__ == "__main__":

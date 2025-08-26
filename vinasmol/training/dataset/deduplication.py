@@ -89,6 +89,8 @@ class RensaBuildIndex(PipelineStep):
         return m
 
 
+# TODO: rehydration (might be less efficient since we're doing that on a subset...)
+# https://github.com/huggingface/fineweb-2/tree/main/misc/rehydration
 class RensaDeduplicate(BaseFilter):
     """Deduplicate documents with a MinHashLSH index implemented by [Rensa](https://github.com/beowolx/rensa).
 
@@ -172,6 +174,9 @@ class RensaDeduplicate(BaseFilter):
         return True
 
 
+# FIXME: decoding issues https://github.com/huggingface/datatrove/issues/121
+# FIXME: datatrove encodes token ids with uint16, which is incompatible with
+# large vocabulary tokenizers
 class ESComputeRangesExternal(PipelineStep):
     """STAGE 2.5 of exact substring deduplication
 

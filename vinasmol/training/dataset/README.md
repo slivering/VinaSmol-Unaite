@@ -184,6 +184,7 @@ TODO: grow the list to all of the pretraining datasets
 
 - [The Lucie-7B LLM and the Lucie Training Dataset: Open resources for multilingual language generation.](https://arxiv.org/abs/2503.12294)
 - [CulturaX: A Cleaned, Enormous, and Multilingual Dataset for Large Language Models in 167 Languages](https://aclanthology.org/2024.lrec-main.377)
+- [FineWeb2: One Pipeline to Scale Them All -- Adapting Pre-Training Data Processing to Every Language](https://arxiv.org/abs/2506.20920)
 - [MADLAD-400 (Multilingual Audited Dataset: Low-resource And Document-level)](https://arxiv.org/abs/2309.04662)
 - [Towards Comprehensive Vietnamese Retrieval-Augmented Generation and Large Language Models](https://arxiv.org/abs/2403.01616)
 - [MTet: Multi-domain Translation for English and Vietnamese](https://arxiv.org/abs/2210.05610)
