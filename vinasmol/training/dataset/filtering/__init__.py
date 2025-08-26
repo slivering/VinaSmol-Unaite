@@ -1,4 +1,4 @@
-from .. import DATA_DIR, DATA_DIR_EN, DATA_DIR_VI # noqa
+from .. import DATA_DIR, DATA_DIR_EN, DATA_DIR_VI, DATA_DIR_CODE # noqa
 
 MAIN_OUTPUT_DIR = DATA_DIR
 FILTERING_OUTPUT_DIR = (MAIN_OUTPUT_DIR / "filtering").resolve()

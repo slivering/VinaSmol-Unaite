@@ -263,7 +263,7 @@ tasks_sequence_dedup = 16
 #             num_threads=16,
 #         ),
 #     ],
-#     logging_dir=f"{LOGGING_DIR}/es/2/{CORPUS}",
+#     logging_dir=f"{LOGGING_DIR}/es/3/{CORPUS}",
 #     depends=sequence_dedup_stage_2,
 # )
 
@@ -315,7 +315,7 @@ final_stage = LocalPipelineExecutor(
     ],
     tasks=tasks_sequence_dedup,
     workers=tasks_sequence_dedup,
-    logging_dir=f"{LOGGING_DIR}/es/3/{CORPUS}",
+    logging_dir=f"{LOGGING_DIR}/final/{CORPUS}",
     depends=document_dedup_stage,
 )
 

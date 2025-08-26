@@ -113,7 +113,7 @@ main_processing_executor = LocalPipelineExecutor(
             filter_curly_bracket=False,
             filter_policy=True,
             remove_citations=True,
-            language=Languages.vietnamese,
+            language=Languages.english,
             exclusion_writer=JsonlWriter(f"{FILTERING_REMOVED_DIR}/5_c4/{CORPUS}"),
         ),
         FineWebQualityFilter(
@@ -206,12 +206,12 @@ final_stage = LocalPipelineExecutor(
         ),
         WordStats(
             f"{STATS_DIR}/words",
-            language=Languages.vietnamese,
+            language=Languages.english,
             top_k_config=top_k_config,
         ),
         SentenceStats(
             f"{STATS_DIR}/sentences",
-            language=Languages.vietnamese,
+            language=Languages.english,
             top_k_config=top_k_config,
         ),
         TokenStats(
@@ -224,7 +224,7 @@ final_stage = LocalPipelineExecutor(
     ],
     tasks=tasks_sequence_dedup,
     workers=tasks_sequence_dedup,
-    logging_dir=f"{LOGGING_DIR}/es/3/{CORPUS}",
+    logging_dir=f"{LOGGING_DIR}/final/{CORPUS}",
     depends=document_dedup_stage,
 )
 
@@ -233,9 +233,6 @@ final_stage = LocalPipelineExecutor(
 def main():
     main_processing_executor.run()
     document_dedup_stage.run()
-    # sequence_dedup_stage_1.run()
-    # sequence_dedup_stage_2.run()
-    # external_dedup_stage_3.run()
     final_stage.run()
 
 if __name__ == "__main__":

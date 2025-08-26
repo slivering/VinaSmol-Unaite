@@ -40,9 +40,11 @@ Filtering, redaction and deduplication can be run with the following command:
 ```bash
 ulimit 100000
 uv run python -m vinasmol.training.dataset.filtering.vietnamese
+uv run python -m vinasmol.training.dataset.filtering.english
+uv run python -m vinasmol.training.dataset.filtering.code
 ```
 
-For now, filtering is only implemented for the Vietnamese datasets. The final results are dumped into `./data/vi-all/deduped`. Information about removal will be written into `./data/vi-all/removed`.
+The final results are written into `./data/vi-all/deduped`, `./data/en-all/deduped` and `./data/code-all/deduped`. Additional logs and statistics about filters and removals can be found in the `./data/` directory.
 
 
 ## Recipe
