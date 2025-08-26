@@ -228,15 +228,13 @@ def download_vietnamese_datasets(data_dir: Path):
     to_sharded_parquet(madlad400, data_dir / "madlad400")
 
     # 29 GB, 17M rows
-    # Apache license for binhvq but underlying copyright unclear
-    # BKAINewsCorpus doesn't have a license, only suggests citation
-    bkai_news = load_dataset("bkai-foundation-models/BKAINewsCorpus", **LOAD_KWARGS)
-    (bkai_news
-        .map(NormalizeCols.bkai_news, remove_columns=bkai_news.column_names)
+    binhvq_news = load_dataset("bigscience-data/roots_vi_binhvq_news_corpus", token=True, **LOAD_KWARGS)
+    (binhvq_news
+        .map(NormalizeCols.binhvq_news, remove_columns=binhvq_news.column_names)
         .shuffle(seed=SEED, buffer_size=10_000)
         .take(1_000_000)
     )
-    to_sharded_parquet(bkai_news, data_dir / "bkai_news")
+    to_sharded_parquet(binhvq_news, data_dir / "binhvq_news")
 
     # 800 MB, 8M rows
     # Can slightly overlap with vbpl and vjol

@@ -61,7 +61,7 @@ The [SmolLM Corpus](https://huggingface.co/datasets/HuggingFaceTB/smollm-corpus)
 - [epfml/FineWeb2-HQ](https://huggingface.co/datasets/epfml/FineWeb2-HQ): General, high-quality web dataset.
 - [CulturaX](https://huggingface.co/datasets/uonlp/CulturaX): General web dataset.
 - [madlad-400_vi](https://huggingface.co/datasets/Symato/madlad-400_vi): General web dataset. Clean Vietnamese subset of [MADLAD-400](https://huggingface.co/datasets/allenai/MADLAD-400)
-- [BKAI News Corpus](bkai-foundation-models/BKAINewsCorpus): large news dataset.
+- [Binhvq News Corpus](https://huggingface.co/datasets/bigscience-data/roots_vi_binhvq_news_corpus): large news dataset.
 - [phongmt184172/mtet](https://huggingface.co/phongmt184172/mtet): Parallel Vietnamese/English pairs.
 - [doanhieung/vbpl](https://huggingface.co/doanhieung/vbpl): Vietnam’s official law texts.
 
@@ -168,7 +168,7 @@ In order to improve generalization capabilities, possibly use toxic identificati
 
 The age difference between pretraining and finetuning datasets results in degraded performance ([Longpre et al., 2023](https://arxiv.org/abs/2305.13169)) due to misaligned language use and knowledge.
 
-For our cases, the Binhvq news corpus (BKAI version), CulturaX and MADLAD-400 date back from 2023, FineWeb2-HQ was compiled in 2025. A good metric is to report the temporal distribution of the training dataset.
+For our cases, the Binhvq news corpus, CulturaX and MADLAD-400 date back from 2023 or older, FineWeb2-HQ was compiled in 2025. A good metric is to report the temporal distribution of the training dataset.
 
 ### Benchmark data decontamination
 

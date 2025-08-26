@@ -46,19 +46,6 @@ def convert_mediawiki_to_md(row: dict, lang: str = 'en') -> dict:
     return row
 
 
-def parse_publication_date(publish: str) -> datetime:
-    """Parse the publication date of a Vietnamese news article.
-
-    Args:
-        publish (str): the value of the "publish" field in the BKAI News Corpus.
-            It should have the following format: `{"$date": "2023-10-16502:16:00.000Z"}`
-
-    Returns:
-        datetime: the parsed publication date.
-    """
-    date = publish["$date"]
-    return datetime.strptime(date, "%Y-%m-%dT%H:%M:%S.000Z")
-
 _DISABLED_PANDOC_MD_EXTENSIONS = [
     'raw_html',
     'fenced_divs',
@@ -158,7 +145,7 @@ class DatasetNames(StrEnum):
     culturax = "uonlp/CulturaX:vi"
     madlad400 = "Symato/madlad-400_vi"
     fineweb2_hq = "epfml/FineWeb2-HQ:vie_Latn"
-    bkai_news_corpus = "bkai-foundation-models/BKAINewsCorpus"
+    binhvq_news_corpus = "bigscience-data/roots_vi_binhvq_news_corpus"
     vbpl = "doanhieung/vbpl"
     mtet = "phongmt184172/mtet"
     ccvj = "ccvj" # In-house dataset
@@ -196,7 +183,7 @@ class DatasetNames(StrEnum):
                 cls.wikipedia_vi,
                 cls.culturax,
                 cls.fineweb2_hq,
-                cls.bkai_news_corpus,
+                cls.binhvq_news_corpus,
                 cls.vbpl,
                 cls.mtet,
                 cls.ccvj,
@@ -222,7 +209,7 @@ class DatasetNames(StrEnum):
             cls.culturax,
             cls.madlad400,
             cls.fineweb2_hq,
-            cls.bkai_news_corpus,
+            cls.binhvq_news_corpus,
             cls.vbpl,
             cls.mtet,
             cls.ccvj,
@@ -532,15 +519,14 @@ class NormalizeCols:
         )
 
     @staticmethod
-    def bkai_news(row: dict) -> dict:
+    def binhvq_news(row: dict) -> dict:
         return dict(
-            id=DatasetNames.bkai_news_corpus.generate_row_id(),
+            id=DatasetNames.binhvq_news_corpus.generate_row_id(),
             text=row['text'],
             metadata=dict(
-                # NOTE: this is an internal URL of the corpus. Only used for URLFilter to accept
-                url=f"{DatasetNames.bkai_news_corpus.placeholder_domain}{row['link']}",
-                date=parse_publication_date(row['publish']).strftime("%Y-%m-%dT%H:%M:%S%z"),
-                **DatasetNames.bkai_news_corpus.origin_metadata(row['id'])
+                # NOTE: this is not the true source URL. Only used for URLFilter to accept
+                url=f"{DatasetNames.binhvq_news_corpus.placeholder_domain}/{row['id']}",
+                **DatasetNames.binhvq_news_corpus.origin_metadata(row['id'])
             )
         )
 
@@ -566,7 +552,7 @@ class NormalizeCols:
         id = DatasetNames.mtet.generate_row_id()
         return dict(
             id=id,
-            # NOTE: this is an fake internal URL for mTet. Only used for URLFilter to accept
+            # NOTE: this is an fake URL for mTet. Only used for URLFilter to accept
             url=f"{DatasetNames.mtet.placeholder_domain}/{id}",
             text=NormalizeCols.format_prompt_response(row['prompt'], row['response']),
             metadata=DatasetNames.mtet.origin_metadata(),
