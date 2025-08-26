@@ -168,8 +168,8 @@ main_processing_executor = LocalPipelineExecutor(
             seed=SEED,
             exclusion_writer=JsonlWriter(f"{FILTERING_REMOVED_DIR}/7_c4_badwords/{CORPUS}")
         ),
-        # Compute perplexity for filtering (TODO: only for web content)
-        # TODO: log perplexity and use per-dataset perplexity models? (cf. The Pile 6.2)
+        # Compute perplexity for filtering
+        # TODO: multiple perplexity models for clusters? (cf. The Pile 6.2)
         # TODO: audit this model for bias
         # TODO: problem for long documents?
         CCNetPerplexityStats(

@@ -1,4 +1,3 @@
-from datetime import datetime
 from enum import StrEnum
 import random
 import re
@@ -34,6 +33,14 @@ def convert_vi_wiki_to_md(title: str, mediawiki: str) -> str:
     """
     raise NotImplementedError
 
+_WIKI_TEMPLATE_RE = re.compile(r"\{\{[^\}]+\}\}", flags=re.MULTILINE)
+_WIKI_END_SECTIONS_TO_REMOVE_RE = re.compile(
+    r"^(Liên kết ngoài|Tham khảo|Thể loại|Xem thêm|Đọc thêm).*",
+    flags = re.DOTALL | re.MULTILINE,
+)
+_WIKI_TEMPLATE_ARTIFACTS_RE = re.compile(r"^\s+(?:\{\{|\|).+\n", flags=re.MULTILINE)
+_WIKI_EMPTY_PARENS_RE = re.compile(r"\([ ,;]*\)")
+
 def convert_mediawiki_to_md(row: dict, lang: str = 'en') -> dict:
     """Replace `'text'` by converting the `'raw_mediawiki'` to Markdown."""
     # TODO: process Wikipedia using wikiplaintext separately
@@ -43,6 +50,14 @@ def convert_mediawiki_to_md(row: dict, lang: str = 'en') -> dict:
     #     case 'vi':
     #         fmt = convert_vi_wiki_to_md
     # row['text'] = fmt(row['title'], row['raw_mediawiki'])
+
+    for pat in [
+        _WIKI_TEMPLATE_RE,
+        _WIKI_TEMPLATE_ARTIFACTS_RE,
+        _WIKI_EMPTY_PARENS_RE,
+        _WIKI_END_SECTIONS_TO_REMOVE_RE,
+    ]:
+        row['text'] = pat.sub("", row['text'])
     return row
 
 
@@ -56,15 +71,15 @@ _DISABLED_PANDOC_MD_EXTENSIONS = [
     'footnotes',
 ]
 
-_MD_LINK = re.compile(r"\[([^\[\]]+)\]\(([^)]+)\)")
-_MD_LINK_WITH_SQUARE_BRACKETS = re.compile(r"\[\\\[([^\[\]]+)\\\]\]\(([^)]+)\)")
+_MD_LINK_RE = re.compile(r"\[([^\[\]]+)\]\(([^)]+)\)")
+_MD_LINK_WITH_DOUBLE_BRACKETS_RE = re.compile(r"\[\\\[([^\[\]]+)\\\]\]\(([^)]+)\)")
 
 _ABSTRACT_RE = re.compile(r"^Abstract", flags=re.MULTILINE)
 _REFERENCES_RE = re.compile(r"^References|^\*\*References", flags=re.MULTILINE)
 
 def replace_md_links_with_text(
         markdown_content: str,
-        pattern: re.Pattern = _MD_LINK,
+        pattern: re.Pattern = _MD_LINK_RE,
     ) -> str:
     """Replace all Markdown links with their text content.
     
@@ -97,6 +112,31 @@ def format_olmocr_pes2o(text: str) -> str:
 
     # This intentionally excludes the appendix, which avoids too long documents
     return title + "\n" + text[abstract_idx:references_idx]
+
+def gutenberg_is_license_acceptable(row: dict) -> bool:
+    # Always True
+    return row['extra']['usagerights'] in ('open', 'copyright_open')
+
+_SQUARE_BRACKETS_RE = re.compile(r"\[[^\]]+\]")
+_STAR_SEPARATOR_RE = re.compile(r"^[\* ]+\n", flags=re.MULTILINE)
+
+def clean_gutenberg_text(row: dict) -> dict:
+    if row['text'].startswith("www.gutenberg.org/license."):
+        row['text'] = "" # Don't bother with cleaning license notice
+    else:
+        row['text'] = _SQUARE_BRACKETS_RE.sub("", row['text'])
+        row['text'] = _STAR_SEPARATOR_RE.sub("", row['text'])
+        lines = row['text'].splitlines()
+        # Remove unnecessary line breaks in the middle of a sentence.
+        # Works for poems if every line starts with a capital letter.
+        for i in range(1, len(lines) - 1):
+            if not lines[i] or not lines[i+1]:
+                continue
+            if lines[i][-1] in r".!?:;,\"'" or lines[i+1][0].isupper():
+                lines[i] += "\n"
+        row['text'] = ''.join(lines[1:]) # TODO: remove publishing info
+
+    return row
 
 
 # pattern : \_\_\_\_\_ (possibly in bold)
@@ -431,8 +471,8 @@ class NormalizeCols:
         )
         # Replace links by their texts
         for pat in [
-                _MD_LINK,
-                _MD_LINK_WITH_SQUARE_BRACKETS,
+                _MD_LINK_RE,
+                _MD_LINK_WITH_DOUBLE_BRACKETS_RE,
             ]:
             md_content = replace_md_links_with_text(md_content, pat)
         
@@ -468,6 +508,18 @@ class NormalizeCols:
             metadata=dict(
                 **filter_keys(row, ['url', 'title']),
                 **DatasetNames.wikipedia_en.origin_metadata(row['id']),
+            )
+        )
+    
+    @staticmethod
+    def gutenberg_en(row: dict) -> dict:
+        return dict(
+            id=DatasetNames.gutenberg_en.generate_row_id(),
+            text=row['text'],
+            metadata=dict(
+                title=row['title'],
+                **row['author'],
+                **DatasetNames.gutenberg_en.origin_metadata(row['id']),
             )
         )
 

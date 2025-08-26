@@ -5,7 +5,9 @@ from datasets import Dataset, IterableDataset, enable_progress_bars, load_datase
 from ...hfmodel import BASE_MODEL, SMOLLM2, LUCIE
 from . import DATA_DIR, DATA_DIR_EN, DATA_DIR_VI
 from .preprocessing import (
-    format_vbpl_md, convert_mediawiki_to_md, NormalizeCols,
+    convert_mediawiki_to_md, format_vbpl_md,
+    gutenberg_is_license_acceptable, clean_gutenberg_text,
+    NormalizeCols,
 )
 
 LOAD_KWARGS = dict(split="train", streaming=True)
@@ -170,8 +172,15 @@ def download_english_datasets(data_dir: Path):
         #claire_en = load_dataset("OpenLLM-France/Lucie-Training-Dataset", "Claire-en", revision="v1.2", **LOAD_KWARGS)
         
         # 5.5B tokens, 56k rows
-        # Needs public domain filtering
-        #gutenberg_en = load_dataset("OpenLLM-France/Lucie-Training-Dataset", "Gutenberg-en", revision="v1.2", **LOAD_KWARGS)
+        gutenberg_en = load_dataset("OpenLLM-France/Lucie-Training-Dataset", "Gutenberg-en", revision="v1.2", **LOAD_KWARGS)
+        gutenberg_en = (gutenberg_en
+            .map(clean_gutenberg_text)
+            .filter(gutenberg_is_license_acceptable)
+            .map(NormalizeCols.gutenberg_en, remove_columns=gutenberg_en.column_names)
+            .shuffle(seed=SEED, buffer_size=1_000)
+            .take(1_000)
+        )
+        to_sharded_parquet(gutenberg_en, data_dir / "gutenberg_en")
         
         # 70M tokens, 10k rows
         #europarl_en = load_dataset("OpenLLM-France/Lucie-Training-Dataset", "Europarl-en", revision="v1.2", **LOAD_KWARGS)
