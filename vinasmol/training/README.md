@@ -66,7 +66,7 @@ Similar to [Sailor 7B](https://arxiv.org/abs/2404.03608), we adjust the language
 
 ### Later stages and annealing
 
-Following the approach used by [SmolLM2](https://arxiv.org/abs/2502.02737v1), we add high-quality content, technical content, textbooks, medium-sized and instruction datasets during the annealing phase in order to maximize their impact.
+Following the approach used by [SmolLM2](https://arxiv.org/abs/2502.02737v1), we add high-quality content, technical content, textbooks, medium-sized and [instruction](https://magazine.sebastianraschka.com/p/instruction-pretraining-llms#%C2%A7pretraining-with-instruction-data) datasets during the annealing phase in order to maximize their impact.
 
 ### Context extension
 

@@ -111,7 +111,7 @@ We use URL-based filtering with the default blacklist and domain name-based heur
 
 We use a `datatrove` pipeline with the filters used by C4, Gopher and FineWeb. Token counting uses the [Sailor 2 8B](https://huggingface.co/sail/Sailor2-8B-Chat) tokenizer, which includes both English and Vietnamese.
 
-In order to filter toxic content, we use a list of flagged words from [Sailcraft](https://github.com/sail-sg/sailcraft) and discard documents with a proportion of flagged words that exceed a threshold.
+In order to filter toxic content, we use a custom list of flagged words from [Sailcraft](https://github.com/sail-sg/sailcraft) and discard documents with a proportion of flagged words that exceed a threshold.
 
 Since the final training dataset is going to be small, around 2B tokens, we could filter data using even more precise quality signals.
 <details>
