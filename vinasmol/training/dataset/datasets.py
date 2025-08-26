@@ -3,7 +3,7 @@ from pathlib import Path
 from datasets import Dataset, IterableDataset, enable_progress_bars, load_dataset
 
 from ...hfmodel import BASE_MODEL, SMOLLM2, LUCIE
-from . import DATA_DIR, DATA_DIR_EN, DATA_DIR_VI
+from . import DATA_DIR, DATA_DIR_CODE, DATA_DIR_EN, DATA_DIR_VI
 from .preprocessing import (
     convert_mediawiki_to_md, format_vbpl_md,
     gutenberg_is_license_acceptable, clean_gutenberg_text,
@@ -81,30 +81,6 @@ def download_english_datasets(data_dir: Path):
             .take(1_000_000)
         )
         to_sharded_parquet(fineweb_edu_dedup, data_dir / "fineweb_edu")
-
-        # 5 GB, 3M rows
-        # Alternative: "meryyllebr543/stack-edu-huggingface", "python" (25M rows), one shard
-        starcoder_python_edu = load_dataset(
-            "JanSchTech/starcoderdata-python-edu-lang-score",
-            **LOAD_KWARGS,
-            columns=[
-                'max_stars_repo_path',
-                'max_stars_repo_name',
-                'id',
-                'language', # TODO: use language=='vi' for finetuning (around 100 examples)
-                'content_cleaned',
-                'edu_score',
-            ]
-        )
-        starcoder_python_edu = (starcoder_python_edu
-            .filter(lambda row: round(row['edu_score']) >= MIN_PYTHON_EDU_SCORE)
-            .map(NormalizeCols.starcoder_python_edu, remove_columns=starcoder_python_edu.column_names)
-            .shuffle(seed=SEED, buffer_size=5_000)
-            .take(500_000)
-        )
-        to_sharded_parquet(starcoder_python_edu, data_dir / "starcoder_python_edu")
-
-        #lucie_python = load_dataset("OpenLLM-France/Lucie-Training-Dataset", "code-python", revision="v1.2", split='train', streaming=True)
         
         # Datasets used in the annealing phase of Lucie
 
@@ -197,6 +173,31 @@ def download_english_datasets(data_dir: Path):
         raise NotImplementedError(BASE_MODEL)
 
 
+def download_code_datasets(data_dir: Path):
+    # 5 GB, 3M rows
+    # Alternative: "meryyllebr543/stack-edu-huggingface", "python" (25M rows), one shard
+    starcoder_python_edu = load_dataset(
+        "JanSchTech/starcoderdata-python-edu-lang-score",
+        **LOAD_KWARGS,
+        columns=[
+            'max_stars_repo_path',
+            'max_stars_repo_name',
+            'id',
+            'language', # TODO: use language=='vi' for finetuning (around 100 examples)
+            'content_cleaned',
+            'edu_score',
+        ]
+    )
+    starcoder_python_edu = (starcoder_python_edu
+        .filter(lambda row: round(row['edu_score']) >= MIN_PYTHON_EDU_SCORE)
+        .map(NormalizeCols.starcoder_python_edu, remove_columns=starcoder_python_edu.column_names)
+        .shuffle(seed=SEED, buffer_size=5_000)
+        .take(500_000)
+    )
+    to_sharded_parquet(starcoder_python_edu, data_dir / "starcoder_python_edu")
+
+    #lucie_python = load_dataset("OpenLLM-France/Lucie-Training-Dataset", "code-python", revision="v1.2", split='train', streaming=True)
+
 
 def download_vietnamese_datasets(data_dir: Path):
     # ~ 1 GB, 1.3M rows
@@ -275,5 +276,7 @@ if __name__ == "__main__":
     enable_progress_bars()
     DATA_DIR_VI.mkdir(parents=True, exist_ok=True)
     DATA_DIR_EN.mkdir(parents=True, exist_ok=True)
-    #download_vietnamese_datasets(DATA_DIR_VI)
+    DATA_DIR_CODE.mkdir(parents=True, exist_ok=True)
+    download_vietnamese_datasets(DATA_DIR_VI)
     download_english_datasets(DATA_DIR_EN)
+    download_code_datasets(DATA_DIR_CODE)

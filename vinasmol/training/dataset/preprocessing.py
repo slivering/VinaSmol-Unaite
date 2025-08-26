@@ -233,7 +233,6 @@ class DatasetNames(StrEnum):
         cls.ENGLISH = {
             cls.cosmopedia_v2,
             cls.fineweb_edu_dedup,
-            cls.starcoder_python_edu,
             cls.open_web_math,
             cls.olmocr_pes2o,
             cls.stackmathqa,
@@ -255,6 +254,7 @@ class DatasetNames(StrEnum):
             cls.ccvj,
         }
         cls.CODE = {
+            cls.starcoder_python_edu,
             cls.lucie_training_code,
         }
         cls.PLACEHOLDER_URLS = [
@@ -614,8 +614,3 @@ class NormalizeCols:
     def ccvj(row: dict) -> dict:
         # TODO
         raise NotImplementedError
-        return dict(
-            id=DatasetNames.ccvj.generate_row_id(),
-            text=row['text'],
-            metadata=DatasetNames.ccvj.origin_metadata(),
-        )
