@@ -146,6 +146,7 @@ def main(
     )
     logger.info("New tokenizer vocabulary size: {}", new_tokenizer.get_vocab_size())
     new_tokenizer_path = tokenizer_out_dir / "new_vietnamese_tokenizer.json"
+    tokenizer_out_dir.mkdir(parents=True, exist_ok=True)
     new_tokenizer.save(f"{new_tokenizer_path}")
 
     base_tokenizer = BASE_MODEL.load_tokenizer()

@@ -10,7 +10,7 @@ The Vietnamese datasets need to have been preprocessed, filtered and deduplicate
 
 ```bash
 python -m vinasmol.tokenization.training \
-    vinasmol/training/dataset/data/deduped/ \
+    vinasmol/training/dataset/data/deduped/vi-all \
     --tokenizer-out-dir vinasmol/tokenization/data \
     --vietnamese-vocab-size 10000
 python -m vinasmol.tokenization.vocab_extension \
