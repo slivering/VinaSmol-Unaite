@@ -138,7 +138,7 @@ def download_english_datasets(data_dir: Path):
             .map(convert_mediawiki_to_md, fn_kwargs=dict(lang='en'))
             .map(NormalizeCols.wikipedia_en, remove_columns=wikipedia_en.column_names)
             .shuffle(seed=SEED, buffer_size=5_000)
-            .take(1_000_000)
+            .take(200_000)
         )
         to_sharded_parquet(wikipedia_en, data_dir / "wikipedia_en")
 
@@ -146,7 +146,7 @@ def download_english_datasets(data_dir: Path):
 
         # 1B tokens, 1M rows, a bit low quality...
         #claire_en = load_dataset("OpenLLM-France/Lucie-Training-Dataset", "Claire-en", revision="v1.2", **LOAD_KWARGS)
-        
+
         # 5.5B tokens, 56k rows
         gutenberg_en = load_dataset("OpenLLM-France/Lucie-Training-Dataset", "Gutenberg-en", revision="v1.2", **LOAD_KWARGS)
         gutenberg_en = (gutenberg_en
@@ -154,10 +154,10 @@ def download_english_datasets(data_dir: Path):
             .filter(gutenberg_is_license_acceptable)
             .map(NormalizeCols.gutenberg_en, remove_columns=gutenberg_en.column_names)
             .shuffle(seed=SEED, buffer_size=1_000)
-            .take(1_000)
+            .take(5_000)
         )
         to_sharded_parquet(gutenberg_en, data_dir / "gutenberg_en")
-        
+
         # 70M tokens, 10k rows
         #europarl_en = load_dataset("OpenLLM-France/Lucie-Training-Dataset", "Europarl-en", revision="v1.2", **LOAD_KWARGS)
         
@@ -227,7 +227,6 @@ def download_vietnamese_datasets(data_dir: Path):
         .take(1_000_000)
     )
     to_sharded_parquet(cultura_x, data_dir / "cultura_x")
-
     # 49 B tokens, 93M rows
     madlad400 = load_dataset("Symato/madlad-400_vi", split="train", streaming=True)
     madlad400 = (madlad400
@@ -237,14 +236,14 @@ def download_vietnamese_datasets(data_dir: Path):
     )
     to_sharded_parquet(madlad400, data_dir / "madlad400")
 
-    # 29 GB, 17M rows
+    # 4 GB, 19M rows
     binhvq_news = load_dataset("bigscience-data/roots_vi_binhvq_news_corpus", token=True, **LOAD_KWARGS)
-    (binhvq_news
+    binhvq_news = (binhvq_news
         .map(NormalizeCols.binhvq_news, remove_columns=binhvq_news.column_names)
-        .shuffle(seed=SEED, buffer_size=10_000)
-        .take(1_000_000)
+        .shuffle(seed=SEED, buffer_size=100_000)
+        .take(10_000_000)
     )
-    to_sharded_parquet(binhvq_news, data_dir / "binhvq_news")
+    to_sharded_parquet(binhvq_news, data_dir / "binhvq_news_corpus")
 
     # 800 MB, 8M rows
     # Can slightly overlap with vbpl and vjol

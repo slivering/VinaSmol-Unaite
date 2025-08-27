@@ -4,6 +4,7 @@ import re
 from typing import Literal
 
 from datatrove.data import Document
+from datatrove.pipeline.base import PipelineStep
 from datatrove.pipeline.filters.base_filter import BaseFilter
 from datatrove.pipeline.filters import (
     C4BadWordsFilter,
@@ -11,6 +12,7 @@ from datatrove.pipeline.filters import (
     URLFilter,
 )
 from datatrove.pipeline.stats.merger import MetricStatsDict
+from datasets import load_dataset
 from loguru import logger
 import numpy as np
 from numpy.random import default_rng
@@ -18,6 +20,26 @@ from tldextract import TLDExtract
 
 
 DEFAULT_FLAGGING_SCORE = 3
+
+class JsonlShard(PipelineStep):
+    type = "Writer (intermediate)"
+
+    name = "Shard JSONL file"
+
+    def __init__(self, input_folder: str, output_folder: str, num_shards: int):
+        super().__init__()
+        self.input_folder = input_folder
+        self.output_folder = output_folder
+        self.num_shards = num_shards
+    
+    def run(self, data, rank = 0, world_size = 1):
+        with self.track_time("shard_jsonl"):
+            ds = load_dataset('json', data_dir=self.input_folder, split='train')
+            for i in range(self.num_shards):
+                shard = ds.shard(self.num_shards, i, keep_in_memory=True)
+                file = Path(self.output_folder) / f"part-{i:04}.jsonl.gz"
+                shard.to_json(f"{file}")
+
 
 class DomainWhitelistMixin(BaseFilter):
     def __init_subclass__(cls, **kwargs):
@@ -28,7 +50,7 @@ class DomainWhitelistMixin(BaseFilter):
             self,
             *args,
             domain_whitelist: list[str] = None,
-            allow_no_url: bool = False,
+            allow_no_url: bool = True,
             **kwargs,
         ):
         super().__init__(*args, **kwargs)
@@ -109,13 +131,15 @@ class FlaggedWordsThresholdFilter(C4BadWordsFilter):
             flagged_re = re.compile(r"(?:\W|^)({})(?:\W|$)".format("|".join(escaped_words)))
             self._badwords_regex[default_language] = flagged_re
             self._flagged_words_scores = scores
+        else:
+            self._flagged_words_scores = {}
 
         self.flagged_thr = flagged_thr
 
     def filter(self, doc: Document) -> bool | tuple[bool, str]:
         lang: str = doc.metadata.get("language", self.default_language)
         
-        badwords_regex = self._get_badwords(lang)
+        badwords_regex = self._get_badwords(lang[:2]) # ISO 639-1
         if badwords_regex is None:
             self.stat_update("missing_badwords_lang", f"missing_badwords_lang_{lang}")
             return True
@@ -178,19 +202,20 @@ class StatQuantileFilter(BaseFilter):
             self,
             stats_dir: str,
             stat_name: str,
-            quantile: float = 0.5,
-            is_better: Literal["lower", "higher"] = "lower",
+            quantiles: tuple[float, float] = (0.2, 0.8),
             keep_fraction: float = 0.1,
             seed = 20250825,
             exclusion_writer = None,
         ):
+        assert 0.0 <= quantiles[0] < quantiles[1] <= 1.0, f"Invalid quantiles: {quantiles}"
+
         super().__init__(exclusion_writer, batch_size=1)
         self.stats_dir = stats_dir
         self.stat_name = stat_name
         self._metric_stats: MetricStatsDict = None
-        self._threshold: float = None
-        self.quantile = quantile
-        self.is_better = is_better
+        self._min_thr: float = None
+        self._max_thr: float = None
+        self.quantiles = quantiles
         self.keep_fraction = keep_fraction
         self.uniform = default_rng(seed).uniform
     
@@ -203,29 +228,20 @@ class StatQuantileFilter(BaseFilter):
             for stat_value_key, metric_stat in self._metric_stats.items():
                 for _ in range(metric_stat.total):
                     values.append(float(stat_value_key))
-            self._threshold = np.quantile(values, self.quantile)
+            self._min_thr = np.quantile(values, self.quantiles[0])
+            self._max_thr = np.quantile(values, self.quantiles[1])
         return self._metric_stats
-    
-    @property
-    def threshold(self) -> float:
-        _ = self.metric_stats
-        return self._threshold
 
     def filter(self, doc: Document):
+        _ = self.metric_stats
         try:
             metric = doc.metadata[self.stat_name]
         except KeyError as e:
             raise RuntimeError(f"Metric {self.stat_name} has not been computed") from e
 
-        condition = (
-            metric <= self.threshold if self.is_better == "lower"
-            else metric > self.threshold
-        )
+        condition = self._min_thr <= metric <= self._max_thr
         return condition or self.uniform() <= self.keep_fraction
-    
-    def filter_batch(self, batch: Document):
-        # TODO
-        return super().filter_batch(batch)
+
 
 class PerplexityFilterWithWhitelist(DomainWhitelistMixin, StatQuantileFilter):
     """Perform perplexity quantile-based filtering, whith a domain whitelist."""

@@ -28,7 +28,6 @@ python -m vinasmol.training.dataset.datasets
 Around 10 GB of data will be downloaded from HuggingFace. The preprocessed datasets will be stored in `./data`.
 
 
-
 ## Filter and deduplicate data
 
 ### Prerequisites
@@ -39,12 +38,23 @@ Filtering, redaction and deduplication can be run with the following command:
 
 ```bash
 ulimit 100000
-uv run python -m vinasmol.training.dataset.filtering.vietnamese
-uv run python -m vinasmol.training.dataset.filtering.english
-uv run python -m vinasmol.training.dataset.filtering.code
+python -m vinasmol.training.dataset.filtering.vietnamese
+python -m vinasmol.training.dataset.filtering.english
+python -m vinasmol.training.dataset.filtering.code
 ```
 
+> [!WARNING]
+>
+> You must cache the required [KenLM](https://huggingface.co/edugp/kenlm/tree/main) models first: [oscar/vi.arpa.bin](https://huggingface.co/edugp/kenlm/tree/main/oscar) and [wikipedia/en.arpa.bin](https://huggingface.co/edugp/kenlm/tree/main/wikipedia). Otherwise the pipeline will download the same model in parallel, which is not what you want.
+
 The final results are written into `./data/vi-all/deduped`, `./data/en-all/deduped` and `./data/code-all/deduped`. Additional logs and statistics about filters and removals can be found in the `./data/` directory.
+
+
+## Create the data mixture
+
+```bash
+python -m vinasmol.training.dataset.mix
+```
 
 
 ## Recipe

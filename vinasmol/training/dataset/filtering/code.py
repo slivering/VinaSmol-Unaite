@@ -9,31 +9,31 @@ from datatrove.pipeline.readers.parquet import ParquetReader
 from datatrove.pipeline.writers.jsonl import JsonlWriter
 
 from ..deduplication import RensaBuildIndex, RensaDeduplicate
+from .common import JsonlShard
 
 from . import (
     DATA_DIR_CODE, MAIN_OUTPUT_DIR, FILTERING_OUTPUT_DIR, FILTERING_REMOVED_DIR,
-    ES_DIR, LOGGING_DIR, STATS_DIR, SEED,
+    LOGGING_DIR, STATS_DIR, SEED,
 )
 CORPUS = "code-all"
 
 output_intermediate_1 = f"{FILTERING_OUTPUT_DIR}/output_1/{CORPUS}"
 output_intermediate_2 = f"{FILTERING_OUTPUT_DIR}/output_2/{CORPUS}"
-es_dir_en = f"{ES_DIR}/{CORPUS}"
+output_intermediate_3 = f"{FILTERING_OUTPUT_DIR}/output_3/{CORPUS}"
 
-top_k_config = TopKConfig(top_k_groups=[])
+top_k_config = TopKConfig(top_k_groups=[], top_k=1)
 
 main_processing_executor = LocalPipelineExecutor(
     pipeline=[
         ParquetReader(
             str(DATA_DIR_CODE),
             recursive=True,
-            limit=100, # TODO: remove, for debugging
             default_metadata={"dump": CORPUS},
         ),
         JsonlWriter(output_intermediate_1),
     ],
-    tasks=16,
-    workers=16,
+    tasks=4,
+    workers=4,
     logging_dir=f"{LOGGING_DIR}/base_processing/{CORPUS}",
 )
 
@@ -61,7 +61,16 @@ document_dedup_stage = LocalPipelineExecutor(
     depends=main_processing_executor,
 )
 
-tasks_sequence_dedup = 16
+reshard_stage = LocalPipelineExecutor(
+    pipeline=[
+        JsonlShard(
+            input_folder=output_intermediate_2,
+            output_folder=output_intermediate_3,
+            num_shards=8,
+        ),
+    ],
+    depends=document_dedup_stage,
+)
 
 final_stage = LocalPipelineExecutor(
     pipeline=[
@@ -79,11 +88,11 @@ final_stage = LocalPipelineExecutor(
             top_k_config=top_k_config,
         ),
         PIIFormatter(),
-        JsonlWriter(f"{MAIN_OUTPUT_DIR}/{CORPUS}/deduped"),
+        JsonlWriter(f"{MAIN_OUTPUT_DIR}/deduped/{CORPUS}"),
     ],
-    tasks=tasks_sequence_dedup,
-    workers=tasks_sequence_dedup,
-    logging_dir=f"{LOGGING_DIR}/es/3/{CORPUS}",
+    tasks=8,
+    workers=8,
+    logging_dir=f"{LOGGING_DIR}/final/{CORPUS}",
     depends=document_dedup_stage,
 )
 
@@ -92,6 +101,7 @@ final_stage = LocalPipelineExecutor(
 def main():
     main_processing_executor.run()
     document_dedup_stage.run()
+    reshard_stage.run()
     final_stage.run()
 
 if __name__ == "__main__":

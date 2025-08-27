@@ -31,16 +31,16 @@ from ..normalization import Formatter
 
 from . import (
     DATA_DIR_VI, MAIN_OUTPUT_DIR, FILTERING_OUTPUT_DIR, FILTERING_REMOVED_DIR,
-    ES_DIR, LOGGING_DIR, STATS_DIR, SEED,
+    ES_DIR, LOGGING_DIR, STATS_DIR as GLOBAL_STATS_DIR, SEED,
 )
 from .common import (
-    URLFilterWithWhitelist, LanguageFilterWithWhitelist,
+    JsonlShard, URLFilterWithWhitelist, LanguageFilterWithWhitelist,
     FlaggedWordsThresholdFilter, PerplexityFilterWithWhitelist
 )
 
 VIETNAMESE_TOKENIZER = VINALLAMA_7B.tokenizer
 
-top_k_config = TopKConfig(top_k_groups=["fqdn"], top_k=10_000)
+top_k_config = TopKConfig(top_k_groups=["fqdn"], top_k=1_000)
 
 
 
@@ -52,11 +52,12 @@ DOMAIN_WHITELIST = [
 ]
 DOMAIN_WHITELIST += DatasetNames.PLACEHOLDER_URLS
 
-# https://huggingface.co/edugp/kenlm/tree/main
+# TODO: audit whether oscar or wikipedia is less biased
 CCNET_PPL_DATASET = "oscar"
 PPL_STAT_NAME = f"ccnet_perplexity_{CCNET_PPL_DATASET}_vi"
-PPL_STAT_DIR = f"{STATS_DIR}/{CORPUS}"
-PPL_STAT_TOPK_CONFIG = TopKConfig(top_k_groups=["histogram"], top_k=100_000)
+STATS_DIR = f"{GLOBAL_STATS_DIR}/{CORPUS}"
+PPL_STAT_DIR = f"{STATS_DIR}/perplexity"
+PPL_STAT_TOPK_CONFIG = TopKConfig(top_k_groups=["histogram"], top_k=10_000)
 PPL_WHITELIST = [
     "vbpl.vn",
     DatasetNames.mtet.placeholder_domain,
@@ -65,6 +66,7 @@ PPL_WHITELIST = [
 
 output_intermediate_1 = f"{FILTERING_OUTPUT_DIR}/output_1/{CORPUS}"
 output_intermediate_2 = f"{FILTERING_OUTPUT_DIR}/output_2/{CORPUS}"
+output_intermediate_3 = f"{FILTERING_OUTPUT_DIR}/output_3/{CORPUS}"
 es_dir_vi = f"{ES_DIR}/{CORPUS}"
 
 main_processing_executor = LocalPipelineExecutor(
@@ -72,7 +74,7 @@ main_processing_executor = LocalPipelineExecutor(
         ParquetReader(
             str(DATA_DIR_VI),
             recursive=True,
-            limit=100, # TODO: remove, for debugging
+            limit=10_000, # TODO: remove, for debugging
             default_metadata={"dump": CORPUS},
         ),
         # URL filtering for malicious, toxic and adult websites
@@ -102,7 +104,7 @@ main_processing_executor = LocalPipelineExecutor(
             [Languages.vietnamese__latn], # Compatible with GlotLID, not with FT176LID
             language_threshold=0.65,
             backend="glotlid", # FIXME: is the LID duplicated across workers?
-            exclusion_writer=JsonlWriter(f"{FILTERING_REMOVED_DIR}/2_non_vietnamese"),
+            exclusion_writer=JsonlWriter(f"{FILTERING_REMOVED_DIR}/2_non_vietnamese/{CORPUS}"),
             domain_whitelist=[DatasetNames.mtet.placeholder_domain],
             allow_no_url=True,
         ),
@@ -184,8 +186,8 @@ main_processing_executor = LocalPipelineExecutor(
 
         JsonlWriter(output_intermediate_1),
     ],
-    tasks=16,
-    workers=16,
+    tasks=48,
+    workers=24,
     logging_dir=f"{LOGGING_DIR}/base_processing/{CORPUS}",
 )
 
@@ -215,12 +217,11 @@ document_dedup_stage = LocalPipelineExecutor(
         PerplexityFilterWithWhitelist(
             stats_dir=PPL_STAT_DIR,
             stat_name=PPL_STAT_NAME,
-            quantile=0.8, # TODO: configure
-            is_better='lower',
+            quantiles=(0.2, 0.8),
             keep_fraction=0.1,
             seed=20250825,
             domain_whitelist=PPL_WHITELIST,
-            exclusion_writer=JsonlWriter(f"{FILTERING_REMOVED_DIR}/8_perplexity/{CORPUS}"),
+            exclusion_writer=JsonlWriter(f"{FILTERING_REMOVED_DIR}/9_perplexity/{CORPUS}"),
         ),
         JsonlWriter(output_intermediate_2),
     ],
@@ -267,9 +268,20 @@ tasks_sequence_dedup = 16
 #     depends=sequence_dedup_stage_2,
 # )
 
+reshard_stage = LocalPipelineExecutor(
+    pipeline=[
+        JsonlShard(
+            input_folder=output_intermediate_2,
+            output_folder=output_intermediate_3,
+            num_shards=48,
+        ),
+    ],
+    depends=document_dedup_stage,
+)
+
 final_stage = LocalPipelineExecutor(
     pipeline=[
-        JsonlReader(output_intermediate_2),
+        JsonlReader(output_intermediate_3),
         # ESRangeRemover(
         #     min_doc_words=50,
         #     sequence_folder=es_dir_vi,
@@ -292,7 +304,7 @@ final_stage = LocalPipelineExecutor(
         # TODO: count syllables
         WordStats(
             f"{STATS_DIR}/words",
-            stop_words=STOP_WORDS,
+            stop_words=set(STOP_WORDS),
             language=Languages.vietnamese,
             top_k_config=top_k_config,
         ),
@@ -310,16 +322,14 @@ final_stage = LocalPipelineExecutor(
         # FIXME: performance/security issues?
         # Possibly use scrubadub for more in-depth cleaning (beware of performance)
         PIIFormatter(),
-        JsonlWriter(f"{MAIN_OUTPUT_DIR}/{CORPUS}/deduped"),
+        JsonlWriter(f"{MAIN_OUTPUT_DIR}/deduped/{CORPUS}"),
         # TODO: shard each of them into their original datasets
     ],
-    tasks=tasks_sequence_dedup,
-    workers=tasks_sequence_dedup,
+    tasks=48,
+    workers=24,
     logging_dir=f"{LOGGING_DIR}/final/{CORPUS}",
-    depends=document_dedup_stage,
+    depends=reshard_stage,
 )
-
-
 
 def main():
     main_processing_executor.run()
@@ -327,6 +337,7 @@ def main():
     # sequence_dedup_stage_1.run()
     # sequence_dedup_stage_2.run()
     # external_dedup_stage_3.run()
+    reshard_stage.run()
     final_stage.run()
 
 if __name__ == "__main__":

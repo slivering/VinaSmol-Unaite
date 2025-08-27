@@ -1,4 +1,5 @@
 from enum import StrEnum
+import json
 import random
 import re
 from threading import Lock
@@ -114,8 +115,8 @@ def format_olmocr_pes2o(text: str) -> str:
     return title + "\n" + text[abstract_idx:references_idx]
 
 def gutenberg_is_license_acceptable(row: dict) -> bool:
-    # Always True
-    return row['extra']['usagerights'] in ('open', 'copyright_open')
+    return True
+    #return json.loads(row['extra'])['usagerights'] in ('open', 'copyright_open')
 
 _SQUARE_BRACKETS_RE = re.compile(r"\[[^\]]+\]")
 _STAR_SEPARATOR_RE = re.compile(r"^[\* ]+\n", flags=re.MULTILINE)
@@ -360,7 +361,7 @@ class NormalizeCols:
             text=row['text'],
             metadata=dict(
                 # Cosmopedia v2 is synthetic data generated from web sources
-                url=f"{DatasetNames.cosmopedia_v2.placeholder_domain}/{id}"
+                url=f"{DatasetNames.cosmopedia_v2.placeholder_domain}/{id}",
                 **filter_keys(row, ['audience', 'format', 'seed_data']),
                 **DatasetNames.cosmopedia_v2.origin_metadata(),
             ),
@@ -434,7 +435,7 @@ class NormalizeCols:
             text=format_olmocr_pes2o(row['text']),
             metadata=dict(
                 # This is not the source URL. No problem for URL filters.
-                url=f"https://api.semanticscholar.org/graph/v1/paper/{row['id']}"
+                url=f"https://api.semanticscholar.org/graph/v1/paper/{row['id']}",
                 **filter_keys(
                     remove_null_from_metadata(row['metadata']),
                     ['pdf-total-pages', 'fieldofstudy']
@@ -517,8 +518,9 @@ class NormalizeCols:
             id=DatasetNames.gutenberg_en.generate_row_id(),
             text=row['text'],
             metadata=dict(
+                url=f"{DatasetNames.gutenberg_en.placeholder_domain}/{row['id']}",
                 title=row['title'],
-                **row['author'],
+                **json.loads(row['author']),
                 **DatasetNames.gutenberg_en.origin_metadata(row['id']),
             )
         )
@@ -572,13 +574,14 @@ class NormalizeCols:
 
     @staticmethod
     def binhvq_news(row: dict) -> dict:
+        id = DatasetNames.binhvq_news_corpus.generate_row_id()
         return dict(
-            id=DatasetNames.binhvq_news_corpus.generate_row_id(),
+            id=id,
             text=row['text'],
             metadata=dict(
                 # NOTE: this is not the true source URL. Only used for URLFilter to accept
-                url=f"{DatasetNames.binhvq_news_corpus.placeholder_domain}/{row['id']}",
-                **DatasetNames.binhvq_news_corpus.origin_metadata(row['id'])
+                url=f"{DatasetNames.binhvq_news_corpus.placeholder_domain}/{id}",
+                **DatasetNames.binhvq_news_corpus.origin_metadata(),
             )
         )
 

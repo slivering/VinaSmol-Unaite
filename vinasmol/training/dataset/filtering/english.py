@@ -28,11 +28,11 @@ from . import (
     ES_DIR, LOGGING_DIR, STATS_DIR, SEED,
 )
 from .common import (
-    URLFilterWithWhitelist, LanguageFilterWithWhitelist,
+    JsonlShard, URLFilterWithWhitelist, LanguageFilterWithWhitelist,
     FlaggedWordsThresholdFilter, PerplexityFilterWithWhitelist
 )
 
-top_k_config = TopKConfig(top_k_groups=["fqdn"], top_k=10_000)
+top_k_config = TopKConfig(top_k_groups=["fqdn"], top_k=1_000)
 
 
 
@@ -44,16 +44,21 @@ DOMAIN_WHITELIST = [
 ]
 DOMAIN_WHITELIST += DatasetNames.PLACEHOLDER_URLS
 
-CCNET_PPL_DATASET = "oscar"
+CCNET_PPL_DATASET = "wikipedia" # oscar KenLM model is gigantic (34 GB for en.arpa.bin)
 PPL_STAT_NAME = f"ccnet_perplexity_{CCNET_PPL_DATASET}_en"
 PPL_STAT_DIR = f"{STATS_DIR}/{CORPUS}"
-PPL_STAT_TOPK_CONFIG = TopKConfig(top_k_groups=["histogram"], top_k=100_000)
+PPL_STAT_TOPK_CONFIG = TopKConfig(top_k_groups=["histogram"], top_k=10_000)
 PPL_WHITELIST = [
     DatasetNames.gutenberg_en.placeholder_domain,
+    DatasetNames.stackmathqa.placeholder_domain,
+    DatasetNames.open_web_math.placeholder_domain,
+    DatasetNames.mathpile_commercial.placeholder_domain,
+    DatasetNames.olmocr_pes2o.placeholder_domain,
 ]
 
 output_intermediate_1 = f"{FILTERING_OUTPUT_DIR}/output_1/{CORPUS}"
 output_intermediate_2 = f"{FILTERING_OUTPUT_DIR}/output_2/{CORPUS}"
+output_intermediate_3 = f"{FILTERING_OUTPUT_DIR}/output_3/{CORPUS}"
 es_dir_en = f"{ES_DIR}/{CORPUS}"
 
 main_processing_executor = LocalPipelineExecutor(
@@ -79,7 +84,7 @@ main_processing_executor = LocalPipelineExecutor(
             [Languages.english__latn], # Compatible with GlotLID, not with FT176LID
             language_threshold=0.65,
             backend="glotlid",
-            exclusion_writer=JsonlWriter(f"{FILTERING_REMOVED_DIR}/2_non_english"),
+            exclusion_writer=JsonlWriter(f"{FILTERING_REMOVED_DIR}/2_non_english/{CORPUS}"),
             domain_whitelist=[DatasetNames.mtet.placeholder_domain],
             allow_no_url=True,
         ),
@@ -128,7 +133,7 @@ main_processing_executor = LocalPipelineExecutor(
         ),
         # TODO: audit for bias (e.g. against medical content, Wikipedia...)
         FlaggedWordsThresholdFilter(
-            default_language=Languages.english,
+            default_language='en',
             flagged_thr=0.01,
             keep_fraction=0.1,
             seed=SEED,
@@ -143,8 +148,8 @@ main_processing_executor = LocalPipelineExecutor(
         ),
         JsonlWriter(output_intermediate_1),
     ],
-    tasks=16,
-    workers=16,
+    tasks=48,
+    workers=24,
     logging_dir=f"{LOGGING_DIR}/base_processing/{CORPUS}",
 )
 
@@ -174,12 +179,11 @@ document_dedup_stage = LocalPipelineExecutor(
         PerplexityFilterWithWhitelist(
             stats_dir=PPL_STAT_DIR,
             stat_name=PPL_STAT_NAME,
-            quantile=0.8,
-            is_better='lower',
+            quantiles=(0.2, 0.8),
             keep_fraction=0.1,
             seed=20250825,
             domain_whitelist=PPL_WHITELIST,
-            exclusion_writer=JsonlWriter(f"{FILTERING_REMOVED_DIR}/8_perplexity/{CORPUS}"),
+            exclusion_writer=JsonlWriter(f"{FILTERING_REMOVED_DIR}/9_perplexity/{CORPUS}"),
         ),
         JsonlWriter(output_intermediate_2),
     ],
@@ -187,7 +191,16 @@ document_dedup_stage = LocalPipelineExecutor(
     depends=main_processing_executor,
 )
 
-tasks_sequence_dedup = 16
+reshard_stage = LocalPipelineExecutor(
+    pipeline=[
+        JsonlShard(
+            input_folder=output_intermediate_2,
+            output_folder=output_intermediate_3,
+            num_shards=48,
+        ),
+    ],
+    depends=document_dedup_stage,
+)
 
 final_stage = LocalPipelineExecutor(
     pipeline=[
@@ -222,8 +235,8 @@ final_stage = LocalPipelineExecutor(
         JsonlWriter(f"{MAIN_OUTPUT_DIR}/{CORPUS}/deduped"),
         # TODO: shard each of them into their original datasets
     ],
-    tasks=tasks_sequence_dedup,
-    workers=tasks_sequence_dedup,
+    tasks=48,
+    workers=24,
     logging_dir=f"{LOGGING_DIR}/final/{CORPUS}",
     depends=document_dedup_stage,
 )
