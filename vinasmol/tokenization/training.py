@@ -1,12 +1,15 @@
-import numpy as np
+import copy
+import json
 from pathlib import Path
 import random
 from typing_extensions import Annotated
 
 from datasets import Dataset, load_dataset
 from loguru import logger
+import numpy as np
+from tokenizers.models import BPE
 from tokenizers.implementations import BaseTokenizer, SentencePieceBPETokenizer
-from transformers import PreTrainedTokenizerBase
+from transformers import GPT2TokenizerFast, PreTrainedTokenizerBase
 import typer
 
 from vinasmol.hfmodel import BASE_MODEL # SMOLLM2
@@ -77,6 +80,7 @@ def train_vietnamese_tokenizer(
         # The unknown token from SmolLM2
         # TODO: don't hardcode this
         unk_token="<|endoftext|>",
+        replacement="Ġ",
         add_prefix_space=True,
         dropout=dropout, # Sailor paper: only during "finetuning"???
         fuse_unk=False,
@@ -94,11 +98,35 @@ def train_vietnamese_tokenizer(
     )
     return tokenizer
 
+
 def merge_tokenizers(
         base_tokenizer: PreTrainedTokenizerBase,
         new_tokenizer: BaseTokenizer,
     ) -> int:
-    """Merge two tokenizer into a base tokenizer.
+    """Merge two tokenizers into a base tokenizer.
+
+    Args:
+        base_tokenizer (PreTrainedTokenizerBase): The pretrained tokenizer to extend.
+        new_tokenizer (BaseTokenizer): The tokenizer trained on the new language.
+
+    Returns:
+        int: The number of new tokens.
+    """
+    new_vocab = [
+        token.replace('Ġ', ' ')
+        for token in new_tokenizer.get_vocab()
+        if not token.isnumeric()
+    ]
+    new_tokens = set(new_vocab) - set(base_tokenizer.get_vocab())
+    return base_tokenizer.add_tokens(list(new_tokens))
+
+# https://gucci-j.github.io/post/en/vocab-expansion/
+# Haven't made this work yet
+def merge_tokenizers_sp_into_gpt2(
+        base_tokenizer: PreTrainedTokenizerBase,
+        new_tokenizer: BaseTokenizer,
+    ) -> int:
+    """Merge two tokenizers into a new tokenizer.
 
     Args:
         base_tokenizer (PreTrainedTokenizerBase): The pretrained tokenizer to extend.
@@ -108,8 +136,51 @@ def merge_tokenizers(
         int: The number of new tokens.
     """
     # Only add the new tokens
-    new_tokens = set(new_tokenizer.get_vocab()) - set(base_tokenizer.get_vocab())
-    return base_tokenizer.add_tokens(list(new_tokens))
+    # TODO: don't add numeric tokens with 2+ digits
+    base_tokenizer_json = json.loads(base_tokenizer._tokenizer.to_str())
+    base_vocab = base_tokenizer_json['model']['vocab']
+    base_merges = base_tokenizer_json['model']['merges']
+
+    new_tokenizer_json = json.loads(new_tokenizer._tokenizer.to_str())
+    new_vocab = new_tokenizer_json['model']['vocab']
+    new_merges = new_tokenizer_json['model']['merges']
+
+    num_new_tokens = 0
+    ret_vocab = copy.copy(base_vocab)
+    ret_merges = []
+    old_merges = copy.copy(base_merges)
+
+    for token in new_vocab:
+        if token not in ret_vocab:
+            ret_vocab[token] = len(ret_vocab)
+            num_new_tokens += 1
+
+    for merge in new_merges:
+        # Add vocab
+        [token_1, token_2] = merge
+        token = token_1 + token_2
+
+        # Add merges
+        if merge in old_merges:
+            old_merges.remove(merge)
+            ret_merges.append(merge)
+        elif token in ret_vocab and token_1 in ret_vocab and token_2 in ret_vocab:
+            ret_merges.append(merge)
+        else:
+            raise RuntimeError
+    
+    merges = ret_merges + old_merges
+    vocab = ret_vocab
+    new_tokenizer.model = BPE(
+        vocab=vocab,
+        merges=[(merge[0], merge[1]) for merge in merges],
+        fuse_unk=False,
+        #byte_fallback=True
+    )
+
+    return num_new_tokens
+
+    
 
 def main(
         dataset_dirs: Annotated[
@@ -158,6 +229,15 @@ def main(
     assert n_added_tokens == effective_n_added_tokens
 
     logger.info("Added {} new tokens", n_added_tokens)
+
+    logger.debug("Test:")
+
+    s = "Việt Nam, quốc hiệu đầy đủ là Cộng hòa xã hội chủ nghĩa Việt Nam, là một quốc gia nằm ở cực Đông của bán đảo Đông Dương thuộc khu vực Đông Nam Á, giáp với Lào, Campuchia, Trung Quốc, biển Đông và vịnh Thái Lan"
+    logger.debug(s)
+    logger.debug(
+        "{}",
+        [base_tokenizer.decode(token) for token in base_tokenizer(s)['input_ids']]
+    )
 
     # TODO: make the added tokens like part of the vocabulary
     # Performance impact on tokenizer loaded with GPT2TokenizerFast.from_pretrained??
