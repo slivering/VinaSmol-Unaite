@@ -17,6 +17,7 @@ from datatrove.pipeline.formatters import PIIFormatter
 from datatrove.pipeline.readers.jsonl import JsonlReader
 from datatrove.pipeline.readers.parquet import ParquetReader
 from datatrove.pipeline.writers.jsonl import JsonlWriter
+from datatrove.pipeline.writers.parquet import ParquetWriter
 from datatrove.utils.text import Languages
 
 
@@ -74,7 +75,6 @@ main_processing_executor = LocalPipelineExecutor(
         ParquetReader(
             str(DATA_DIR_VI),
             recursive=True,
-            limit=10_000, # TODO: remove, for debugging
             default_metadata={"dump": CORPUS},
         ),
         # URL filtering for malicious, toxic and adult websites
@@ -140,7 +140,7 @@ main_processing_executor = LocalPipelineExecutor(
         C4QualityFilter(
             filter_no_terminal_punct=False,
             min_num_sentences=3,
-            #min_words_per_line=1,
+            min_words_per_line=-1,
             # FIXME: filter=True ?? would that hurt understanding of programming blogs?
             filter_javascript=False,
             filter_curly_bracket=False,
@@ -163,7 +163,7 @@ main_processing_executor = LocalPipelineExecutor(
         ),
         # TODO: audit for bias (e.g. against medical content, Wikipedia...)
         FlaggedWordsThresholdFilter(
-            default_language=Languages.vietnamese,
+            default_language='vi',
             language_flagged_words_override=FLAGGED_WORDS_SAILCRAFT,
             flagged_thr=0.01,
             keep_fraction=0.1,
@@ -187,7 +187,7 @@ main_processing_executor = LocalPipelineExecutor(
         JsonlWriter(output_intermediate_1),
     ],
     tasks=48,
-    workers=24,
+    workers=16,
     logging_dir=f"{LOGGING_DIR}/base_processing/{CORPUS}",
 )
 
@@ -322,11 +322,11 @@ final_stage = LocalPipelineExecutor(
         # FIXME: performance/security issues?
         # Possibly use scrubadub for more in-depth cleaning (beware of performance)
         PIIFormatter(),
-        JsonlWriter(f"{MAIN_OUTPUT_DIR}/deduped/{CORPUS}"),
+        ParquetWriter(f"{MAIN_OUTPUT_DIR}/deduped/{CORPUS}"),
         # TODO: shard each of them into their original datasets
     ],
     tasks=48,
-    workers=24,
+    workers=16,
     logging_dir=f"{LOGGING_DIR}/final/{CORPUS}",
     depends=reshard_stage,
 )

@@ -16,6 +16,7 @@ from datatrove.pipeline.formatters import PIIFormatter
 from datatrove.pipeline.readers.jsonl import JsonlReader
 from datatrove.pipeline.readers.parquet import ParquetReader
 from datatrove.pipeline.writers.jsonl import JsonlWriter
+from datatrove.pipeline.writers.parquet import ParquetWriter
 from datatrove.utils.text import Languages
 
 
@@ -66,7 +67,6 @@ main_processing_executor = LocalPipelineExecutor(
         ParquetReader(
             str(DATA_DIR_EN),
             recursive=True,
-            limit=100, # TODO: remove, for debugging
             default_metadata={"dump": CORPUS},
         ),
         URLFilterWithWhitelist(
@@ -113,7 +113,7 @@ main_processing_executor = LocalPipelineExecutor(
         C4QualityFilter(
             filter_no_terminal_punct=False,
             min_num_sentences=3,
-            #min_words_per_line=1,
+            min_words_per_line=-1,
             filter_javascript=False,
             filter_curly_bracket=False,
             filter_policy=True,
@@ -149,7 +149,7 @@ main_processing_executor = LocalPipelineExecutor(
         JsonlWriter(output_intermediate_1),
     ],
     tasks=48,
-    workers=24,
+    workers=16,
     logging_dir=f"{LOGGING_DIR}/base_processing/{CORPUS}",
 )
 
@@ -232,11 +232,11 @@ final_stage = LocalPipelineExecutor(
             top_k_config=top_k_config,
         ),
         PIIFormatter(),
-        JsonlWriter(f"{MAIN_OUTPUT_DIR}/{CORPUS}/deduped"),
+        ParquetWriter(f"{MAIN_OUTPUT_DIR}/{CORPUS}/deduped"),
         # TODO: shard each of them into their original datasets
     ],
     tasks=48,
-    workers=24,
+    workers=16,
     logging_dir=f"{LOGGING_DIR}/final/{CORPUS}",
     depends=document_dedup_stage,
 )

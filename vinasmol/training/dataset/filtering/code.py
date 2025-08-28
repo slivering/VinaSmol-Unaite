@@ -7,6 +7,7 @@ from datatrove.pipeline.formatters import PIIFormatter
 from datatrove.pipeline.readers.jsonl import JsonlReader
 from datatrove.pipeline.readers.parquet import ParquetReader
 from datatrove.pipeline.writers.jsonl import JsonlWriter
+from datatrove.pipeline.writers.parquet import ParquetWriter
 
 from ..deduplication import RensaBuildIndex, RensaDeduplicate
 from .common import JsonlShard
@@ -88,7 +89,7 @@ final_stage = LocalPipelineExecutor(
             top_k_config=top_k_config,
         ),
         PIIFormatter(),
-        JsonlWriter(f"{MAIN_OUTPUT_DIR}/deduped/{CORPUS}"),
+        ParquetWriter(f"{MAIN_OUTPUT_DIR}/deduped/{CORPUS}"),
     ],
     tasks=8,
     workers=8,

@@ -14,7 +14,7 @@ dependencies = [
     "ftfy",
     "gguf",
     "jsonlines",
-    "litgpt[extra]",
+    "litgpt[extra]>=0.5",
     "loguru",
     "matplotlib",
     "pandas",
