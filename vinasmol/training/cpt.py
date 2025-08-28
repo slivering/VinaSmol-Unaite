@@ -50,23 +50,27 @@ class SmolLMDataModule(DataModule):
                 )
 
     def train_dataloader(self) -> DataLoader:
-        from litdata.streaming import CombinedStreamingDataset, StreamingDataLoader, StreamingDataset, TokensLoader
+        from litdata.streaming.item_loader import ParquetLoader
+        from litdata.streaming import (
+            CombinedStreamingDataset,
+            StreamingDataLoader, StreamingDataset,
+        )
 
         vi_train_data = StreamingDataset(
             input_dir=self.vi_train,
-            item_loader=TokensLoader(block_size=self.seq_length),
+            item_loader=ParquetLoader(),
             shuffle=True,
             drop_last=True,
         )
         en_train_data = StreamingDataset(
             input_dir=self.en_train,
-            item_loader=TokensLoader(block_size=self.seq_length),
+            item_loader=ParquetLoader(),
             shuffle=True,
             drop_last=True,
         )
         code_train_data = StreamingDataset(
             input_dir=self.code_train,
-            item_loader=TokensLoader(block_size=self.seq_length),
+            item_loader=ParquetLoader(block_size=self.seq_length),
             shuffle=True,
             drop_last=True,
         )
@@ -88,21 +92,24 @@ class SmolLMDataModule(DataModule):
         return train_dataloader
 
     def val_dataloader(self) -> DataLoader:
-        from litdata.streaming import StreamingDataLoader, CombinedStreamingDataset, StreamingDataset, TokensLoader
+        from litdata.streaming.item_loader import ParquetLoader
+        from litdata.streaming import (
+            StreamingDataLoader, CombinedStreamingDataset, StreamingDataset,
+        )
 
         vi_val_data = StreamingDataset(
             input_dir=self.vi_val,
-            item_loader=TokensLoader(block_size=self.seq_length),
+            item_loader=ParquetLoader(block_size=self.seq_length),
             shuffle=True,
         )
         en_val_data = StreamingDataset(
             input_dir=self.en_val,
-            item_loader=TokensLoader(block_size=self.seq_length),
+            item_loader=ParquetLoader(block_size=self.seq_length),
             shuffle=True,
         )
         code_val_data = StreamingDataset(
             input_dir=self.code_val,
-            item_loader=TokensLoader(block_size=self.seq_length),
+            item_loader=ParquetLoader(block_size=self.seq_length),
             shuffle=True,
         )
         val_datasets = [

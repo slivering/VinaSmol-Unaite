@@ -26,6 +26,7 @@ def to_sharded_parquet(
         dataset: Dataset | IterableDataset,
         dir: str | Path,
         shard_size_bytes: int = SHARD_SIZE,
+        main_column: str = 'text',
     ) -> list[Path]:
     """Save a dataset sharded into Parquet files.
 
@@ -43,7 +44,7 @@ def to_sharded_parquet(
 
     dir = Path(dir)
     dir.mkdir(parents=True, exist_ok=True)
-    num_shards = max(1, estimate_dataset_size(dataset) // shard_size_bytes)
+    num_shards = max(1, estimate_dataset_size(dataset, text_column=main_column) // shard_size_bytes)
 
     files = []
     for i in range(num_shards):

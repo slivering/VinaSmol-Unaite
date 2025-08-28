@@ -300,7 +300,7 @@ class DatasetNames(StrEnum):
         if id is None:
             metadata['dataset_generated_id'] = self._counter
         else:
-            metadata['dataset_generated_id'] = id
+            metadata['dataset_generated_id'] = str(id)
         
         return metadata
 
@@ -378,7 +378,7 @@ class NormalizeCols:
                     row['metadata'],
                     ['dump', 'url', 'date', 'file_path', 'score', 'int_score'],
                 ),
-                **DatasetNames.fineweb_edu_dedup.origin_metadata(row['id']),
+                **DatasetNames.fineweb_edu_dedup.origin_metadata(str(row['id'])),
             ),
         )
 
@@ -391,7 +391,7 @@ class NormalizeCols:
                 # Fake url, handy for identification purposes
                 url=f"https://github.com/{row['max_stars_repo_name']}/{row['max_stars_repo_path']}",
                 **filter_keys(row, ['language', 'edu_score']),
-                **DatasetNames.starcoder_python_edu.origin_metadata(row['id']),
+                **DatasetNames.starcoder_python_edu.origin_metadata(str(row['id'])),
             ),
         )
     
@@ -440,7 +440,7 @@ class NormalizeCols:
                     remove_null_from_metadata(row['metadata']),
                     ['pdf-total-pages', 'fieldofstudy']
                 ),
-                **DatasetNames.olmocr_pes2o.origin_metadata(row['id']),
+                **DatasetNames.olmocr_pes2o.origin_metadata(str(row['id'])),
             ),
         )
     
@@ -484,7 +484,7 @@ class NormalizeCols:
                 # TODO: find true URL
                 url=f"{DatasetNames.mathpile_commercial.placeholder_domain}/{row['meta']['id']}",
                 **filter_keys(row, ['subset']),
-                **DatasetNames.mathpile_commercial.origin_metadata(row['meta']['id']),
+                **DatasetNames.mathpile_commercial.origin_metadata(str(row['meta']['id'])),
             ),
         )
 
@@ -497,7 +497,7 @@ class NormalizeCols:
                 # Transcripts of conversations. Not web content
                 url=f"{DatasetNames.claire_en.placeholder_domain}/{row['id']['idx_row']}",
                 subset=row['extra']['subset'],
-                **DatasetNames.claire_en.origin_metadata(row['id']['idx_row']),
+                **DatasetNames.claire_en.origin_metadata(str(row['id']['idx_row'])),
             ),
         ) 
     
@@ -508,7 +508,7 @@ class NormalizeCols:
             text=row['text'],
             metadata=dict(
                 **filter_keys(row, ['url', 'title']),
-                **DatasetNames.wikipedia_en.origin_metadata(row['id']),
+                **DatasetNames.wikipedia_en.origin_metadata(str(row['id'])),
             )
         )
     
@@ -521,7 +521,7 @@ class NormalizeCols:
                 url=f"{DatasetNames.gutenberg_en.placeholder_domain}/{row['id']}",
                 title=row['title'],
                 **json.loads(row['author']),
-                **DatasetNames.gutenberg_en.origin_metadata(row['id']),
+                **DatasetNames.gutenberg_en.origin_metadata(str(row['id'])),
             )
         )
 
@@ -532,7 +532,7 @@ class NormalizeCols:
             text=row['text'],
             metadata=dict(
                 **filter_keys(row, ['url', 'title']),
-                **DatasetNames.wikipedia_vi.origin_metadata(row['id']),
+                **DatasetNames.wikipedia_vi.origin_metadata(str(row['id'])),
             )
         )
 
@@ -568,7 +568,7 @@ class NormalizeCols:
             metadata=dict(
                 # How is quality score computed?
                 **filter_keys(row, ['url', 'date', 'dump', 'language_score', 'quality_score']),
-                **DatasetNames.fineweb2_hq.origin_metadata(row['id']),
+                **DatasetNames.fineweb2_hq.origin_metadata(str(row['id'])),
             )
         )
 
@@ -598,7 +598,7 @@ class NormalizeCols:
                 sector=row["Lĩnh vực"],
                 effective_date=row["Ngày có hiệu lực"],
                 validity_status=row["Tình trạng hiệu lực"],
-                **DatasetNames.vbpl.origin_metadata(row['id'])
+                **DatasetNames.vbpl.origin_metadata(str(row['id']))
             )
         )
 

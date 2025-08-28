@@ -1,7 +1,6 @@
 import json
 from pathlib import Path
 import re
-from typing import Literal
 
 from datatrove.data import Document
 from datatrove.pipeline.base import PipelineStep
@@ -245,3 +244,5 @@ class StatQuantileFilter(BaseFilter):
 
 class PerplexityFilterWithWhitelist(DomainWhitelistMixin, StatQuantileFilter):
     """Perform perplexity quantile-based filtering, whith a domain whitelist."""
+
+    name = "🤔 Perplexity filter"
