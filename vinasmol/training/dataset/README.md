@@ -51,11 +51,22 @@ The final results are written into `./data/vi-all/deduped`, `./data/en-all/dedup
 
 TODO: write code and document about datasets moved for annealing: pes2o, openwebmath, stackmathqa
 
-## Create the data mixture
+## Prepare data for training
+
+### Requirements
+
+- A SmolLM2 tokenizer checkpoint ([details here](../../tokenization/README.md#extend-smollms-vocabulary-with-vietnamese))
+
+The following script will:
+1. Split the training Vietnamese, English and code datasets into train/val/test splits
+2. Tokenize each split with the merged tokenizer
+3. Optimize them with [LitData](https://github.com/Lightning-AI/litdata).
 
 ```bash
-python -m vinasmol.training.dataset.mix
+python -m vinasmol.training.dataset.preparation
 ```
+
+The optimized data will be written in the [`./data/tokenized`](./data/tokenized) directory.
 
 
 ## Recipe

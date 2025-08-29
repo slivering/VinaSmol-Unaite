@@ -21,7 +21,7 @@ We use the [Efficient and Effective Vocabulary Extension](https://arxiv.org/abs/
 
 #### Tokenizer training
 
-We train a new tokenizer on Vietnamese corpora and extend the base tokenizer with the new tokens. [Details](../tokenization/README.md).
+We train a new tokenizer on Vietnamese corpora and extend the base tokenizer with the new tokens. Details for running tokenizer training, merging, vocabulary extension and embedding initialization can be found [here](../tokenization/README.md).
 
 #### Embedding initialization
 
@@ -35,6 +35,22 @@ For the output embeddings of the new tokens, Kim et al. suggest to initialize th
 </details>
 
 ### Multi-stage training
+
+#### Requirements
+
+- A SmolLM2-360M checkpoint with extended vocabulary ([instructions here](../tokenization/README.md#extend-smollms-vocabulary-with-vietnamese))
+- The prepared Vietnamese, English and code datasets ([instructions here](./dataset/README.md#prepare-data-for-training))
+
+The training pipeline can be started with the following commands:
+
+```bash
+# Convert the SmolLM2-360M weights & tokenizer to a litgpt checkpoint
+litgpt convert_to_litgpt vinasmol/tokenization/data/smollm_extended
+
+cd vinasmol/training
+# Start initial continued pretraining with sequences of length 2048
+bash cpt_stage_1_main.sh
+```
 
 The different training stages used in EEVE are depicted below.
 
@@ -64,13 +80,19 @@ Refer to https://huggingface.co/blog/smollm and the [SmolLM2 paper](https://arxi
 
 Similar to [Sailor 7B](https://arxiv.org/abs/2404.03608), we adjust the language mixture proportions and the learning rate based on initial experiments.
 
+### Context extension
+
+We continued the pretraining of SmolLM2 on sequence lengths of 2048 to save costs. However, this caused the model to lose its context length extension of 8192. Therefore we rerun context length extension for the final VinaSmol model.
+
+We follow the procedure outlined by [Gao et al.](https://arxiv.org/abs/2410.02660), keeping the same data mixture but upsampling long documents within each dataset.
+
 ### Later stages and annealing
 
 Following the approach used by [SmolLM2](https://arxiv.org/abs/2502.02737v1), we add high-quality content, technical content, textbooks, medium-sized and [instruction](https://magazine.sebastianraschka.com/p/instruction-pretraining-llms#%C2%A7pretraining-with-instruction-data) datasets during the annealing phase in order to maximize their impact.
 
-### Context extension
-
-We follow the procedure outlined by [Gao et al.](https://arxiv.org/abs/2410.02660), keeping the same data mixture but upsampling long documents within each dataset.
+The new  high-quality datasets are added for annealing:
+- CCVJ (Vietnamese)
+- OlmOCR-PeS2o, OpenWebMath, StackMathQA (English)
 
 ## Further improvements
 
