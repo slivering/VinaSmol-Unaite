@@ -1,3 +1,4 @@
+from functools import partial
 import os
 from pathlib import Path
 from typing import Annotated
@@ -15,15 +16,15 @@ SEED = 20250827
 
 DATA_DIRS = [
     DATA_DIR / "deduped" / "en-all",
-    #DATA_DIR / "deduped" / "vi-all",
-    #DATA_DIR / "deduped" / "code-all",
+    DATA_DIR / "deduped" / "vi-all",
+    DATA_DIR / "deduped" / "code-all",
 ]
 
 MAIN_SPLITS_DIR = DATA_DIR / "deduped" / "splits"
 
 def tokenize_examples(
-        tokenizer: PreTrainedTokenizerFast,
         examples: dict,
+        tokenizer: PreTrainedTokenizerFast,
         add_bos_eos: bool = True,
     ) -> list[list[int]]:
     """Tokenize a batch of examples.
@@ -64,9 +65,8 @@ def tokenize_to_parquet_splits(
         tokenizer: PreTrainedTokenizerFast,
     ):
     ds = load_dataset('parquet', split='train', data_dir=f"{data_dir}")
-    # TODO: take the full dataset
-    ds = ds.take(10000).map(
-        tokenize_examples,
+    ds = ds.map(
+        partial(tokenize_examples, tokenizer=tokenizer),
         batched=True,
         num_proc=16,
         remove_columns=ds.column_names,

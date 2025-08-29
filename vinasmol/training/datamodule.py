@@ -59,32 +59,32 @@ class SmolLMDataModule(DataModule):
             StreamingDataLoader, StreamingDataset,
         )
 
-        # vi_train_data = StreamingDataset(
-        #     input_dir=self.vi_train,
-        #     item_loader=TokensLoader(block_size=self.seq_length),
-        #     shuffle=True,
-        #     drop_last=True,
-        # )
+        vi_train_data = StreamingDataset(
+            input_dir=self.vi_train,
+            item_loader=TokensLoader(block_size=self.seq_length),
+            shuffle=True,
+            drop_last=True,
+        )
         en_train_data = StreamingDataset(
             input_dir=self.en_train,
             item_loader=TokensLoader(block_size=self.seq_length),
             shuffle=True,
             drop_last=True,
         )
-        # code_train_data = StreamingDataset(
-        #     input_dir=self.code_train,
-        #     item_loader=TokensLoader(block_size=self.seq_length),
-        #     shuffle=True,
-        #     drop_last=True,
-        # )
+        code_train_data = StreamingDataset(
+            input_dir=self.code_train,
+            item_loader=TokensLoader(block_size=self.seq_length),
+            shuffle=True,
+            drop_last=True,
+        )
         train_datasets = [
-            # vi_train_data,
+            vi_train_data,
             en_train_data,
-            # code_train_data,
+            code_train_data,
         ]
 
         # Mix Vietnamese, English and code data with these proportions
-        weights = (0.1,)#(0.5, 0.4, 0.1)
+        weights = (0.55, 0.4, 0.05)
         train_data = CombinedStreamingDataset(
             datasets=train_datasets,
             seed=self.seed,

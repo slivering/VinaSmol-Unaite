@@ -10,7 +10,7 @@ from datatrove.pipeline.writers.jsonl import JsonlWriter
 from datatrove.pipeline.writers.parquet import ParquetWriter
 
 from ..deduplication import RensaBuildIndex, RensaDeduplicate
-from .common import JsonlShard
+from .common import JsonlShard, RetainMetadata
 
 from . import (
     DATA_DIR_CODE, MAIN_OUTPUT_DIR, FILTERING_OUTPUT_DIR, FILTERING_REMOVED_DIR,
@@ -31,6 +31,10 @@ main_processing_executor = LocalPipelineExecutor(
             recursive=True,
             default_metadata={"dump": CORPUS},
         ),
+        RetainMetadata(fields_to_keep=[
+            'origin',
+            'url',
+        ]),
         JsonlWriter(output_intermediate_1),
     ],
     tasks=4,
