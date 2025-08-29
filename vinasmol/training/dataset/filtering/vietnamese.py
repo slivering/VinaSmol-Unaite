@@ -35,7 +35,7 @@ from . import (
     ES_DIR, LOGGING_DIR, STATS_DIR as GLOBAL_STATS_DIR, SEED,
 )
 from .common import (
-    JsonlShard, URLFilterWithWhitelist, LanguageFilterWithWhitelist,
+    JsonlShard, RetainMetadata, URLFilterWithWhitelist, LanguageFilterWithWhitelist,
     FlaggedWordsThresholdFilter, PerplexityFilterWithWhitelist
 )
 
@@ -223,6 +223,10 @@ document_dedup_stage = LocalPipelineExecutor(
             domain_whitelist=PPL_WHITELIST,
             exclusion_writer=JsonlWriter(f"{FILTERING_REMOVED_DIR}/9_perplexity/{CORPUS}"),
         ),
+        RetainMetadata(fields_to_keep=[
+            'origin',
+            'url',
+        ]),
         JsonlWriter(output_intermediate_2),
     ],
     logging_dir=f"{LOGGING_DIR}/minhash/{CORPUS}",

@@ -49,6 +49,7 @@ python -m vinasmol.training.dataset.filtering.code
 
 The final results are written into `./data/vi-all/deduped`, `./data/en-all/deduped` and `./data/code-all/deduped`. Additional logs and statistics about filters and removals can be found in the `./data/` directory.
 
+TODO: write code and document about datasets moved for annealing: pes2o, openwebmath, stackmathqa
 
 ## Create the data mixture
 

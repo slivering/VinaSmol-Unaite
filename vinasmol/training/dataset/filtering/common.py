@@ -3,6 +3,7 @@ from pathlib import Path
 import re
 
 from datatrove.data import Document
+from datatrove.pipeline.formatters import base
 from datatrove.pipeline.base import PipelineStep
 from datatrove.pipeline.filters.base_filter import BaseFilter
 from datatrove.pipeline.filters import (
@@ -21,7 +22,7 @@ from tldextract import TLDExtract
 DEFAULT_FLAGGING_SCORE = 3
 
 class JsonlShard(PipelineStep):
-    type = "Writer (intermediate)"
+    type = "💽 - WRITER"
 
     name = "Shard JSONL file"
 
@@ -39,6 +40,22 @@ class JsonlShard(PipelineStep):
                 file = Path(self.output_folder) / f"part-{i:04}.jsonl.gz"
                 shard.to_json(f"{file}")
 
+class RetainMetadata(PipelineStep):
+    type = "✂️ - FORMAT"
+
+    name = "Retain metadata"
+
+    def __init__(self, fields_to_keep: list[str]):
+        super().__init__()
+        self.fields_to_keep = fields_to_keep
+
+    def run(self, data, rank = 0, world_size = 1):
+        for document in data:
+            document.metadata = {
+                key: document.metadata.get(key)
+                for key in self.fields_to_keep
+            }
+            yield document
 
 class DomainWhitelistMixin(BaseFilter):
     def __init_subclass__(cls, **kwargs):

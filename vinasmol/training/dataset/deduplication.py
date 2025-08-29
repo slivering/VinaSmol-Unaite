@@ -78,9 +78,10 @@ class RensaBuildIndex(PipelineStep):
     def index(self, document: Document):
         rminhash_obj = self.generate_minhash_signature(document.text)
         if document.id in self._minhashes:
-            raise RuntimeError(f"Found duplicate document id: {document.id}")
-        self._minhashes[document.id] = rminhash_obj
-        self._lsh_index.insert(document.id, rminhash_obj)
+            self.stat_update('bad_duplicated_doc_id')
+        else:
+            self._minhashes[document.id] = rminhash_obj
+            self._lsh_index.insert(document.id, rminhash_obj)
     
     # Define a function to generate MinHash (works for RMinHash, CMinHash)
     def generate_minhash_signature(self, text: str):
@@ -117,6 +118,7 @@ class RensaDeduplicate(BaseFilter):
     [here](https://github.com/beowolx/rensa?tab=readme-ov-file#large-scale-benchmark-salesforcewikitext-18-million-rows).
     """
 
+    type = "🫂 - DEDUP"
     name = "🦀 Rensa deduplication stage 2"
 
     def __init__(self, rensa_index: RensaBuildIndex, exclusion_writer = None):
