@@ -23,6 +23,10 @@ Download and preprocess the Vietnamese and English datasets by executing:
 
 ```bash
 python -m vinasmol.training.dataset.datasets
+
+cd vinasmol/training/dataset/data/english
+mkdir -p ../annealing/english
+mv pes2o openwebmath stackmathqa ../annealing/english
 ```
 
 Around 10 GB of data will be downloaded from HuggingFace. The preprocessed datasets will be stored in `./data`.
@@ -48,8 +52,6 @@ python -m vinasmol.training.dataset.filtering.code
 > You must cache the required [KenLM](https://huggingface.co/edugp/kenlm/tree/main) models first: [oscar/vi.arpa.bin](https://huggingface.co/edugp/kenlm/tree/main/oscar) and [wikipedia/en.arpa.bin](https://huggingface.co/edugp/kenlm/tree/main/wikipedia). Otherwise the pipeline will download the same model in parallel, which is not what you want.
 
 The final results are written into `./data/vi-all/deduped`, `./data/en-all/deduped` and `./data/code-all/deduped`. Additional logs and statistics about filters and removals can be found in the `./data/` directory.
-
-TODO: write code and document about datasets moved for annealing: pes2o, openwebmath, stackmathqa
 
 ## Prepare data for training
 
@@ -91,7 +93,9 @@ The [SmolLM Corpus](https://huggingface.co/datasets/HuggingFaceTB/smollm-corpus)
 
 #### In-house datasets
 
-Wee compile a dataset of Vietnamese academic papers. More information [here](./ccvj/README.md).
+We compile a dataset of Vietnamese academic papers. More information [here](./ccvj/README.md).
+
+TODO: include CCVJ into annealing datasets
 
 ### Training budget
 
