@@ -40,7 +40,7 @@ def tokenize_examples(
     It is necessary since SmolLM2 was trained with them.
     """
     # No need to return as np/pt since we append and concatenate the whole sequence
-    tokens_batch = tokenizer(examples['text'])['input_ids']
+    tokens_batch = tokenizer(examples['text'], add_special_tokens=False)['input_ids']
 
     if add_bos_eos:
         if tokenizer.bos_token_id != tokenizer.eos_token_id:
