@@ -54,7 +54,7 @@ The training pipeline can then be started with the following commands:
 
 ```bash
 # Convert the SmolLM2-360M weights & tokenizer to a litgpt checkpoint
-litgpt convert_to_litgpt vinasmol/tokenization/data/smollm_extended
+litgpt convert_to_litgpt --model_name SmolLM2-360M vinasmol/tokenization/data/smollm_extended
 
 cd vinasmol/training
 # Start initial continued pretraining with sequences of length 2048

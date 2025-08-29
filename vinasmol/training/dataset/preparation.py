@@ -5,6 +5,8 @@ from typing import Annotated
 
 from datasets import load_dataset
 from litdata import optimize, TokensLoader
+import pyarrow.parquet as pq
+import torch
 from transformers import GPT2TokenizerFast, PreTrainedTokenizerFast
 import typer
 
@@ -41,20 +43,21 @@ def tokenize_examples(
     It is necessary since SmolLM2 was trained with them.
     """
     # No need to return as np/pt since we append and concatenate the whole sequence
-    tokens_batch = tokenizer(examples['text'], add_special_tokens=False)['input_ids']
+    tokens_batch = tokenizer(
+        examples['text'],
+        add_special_tokens=False,
+        return_attention_mask=False,
+        max_length=200_000, # suppresses warnings abount sequence length
+    )['input_ids']
 
     if add_bos_eos:
-        if tokenizer.bos_token_id != tokenizer.eos_token_id:
-            raise ValueError(
-                f"BOS == {tokenizer.bos_token_id} "
-                f"but EOS == {tokenizer.eos_token_id}."
-                " Expected BOS == EOS for SmolLM2's tokenizer."
-            )
-        # No need to add BOS for the first example since the last example
-        # of the previous batch already ends with EOS.
-        # litdata.optimize concatenates and chunks the whole token sequence
+        assert tokenizer.bos_token_id is not None
+        assert tokenizer.eos_token_id is not None
+
         for tokens in tokens_batch:
-            # Only interleave one separator.
+            assert tokens[0] != tokenizer.bos_token_id
+            assert tokens[-1] != tokenizer.eos_token_id
+            tokens.insert(0, tokenizer.bos_token_id)
             tokens.append(tokenizer.eos_token_id)
     
     return {'input_ids': tokens_batch}
@@ -85,14 +88,23 @@ def tokenize_to_parquet_splits(
     to_sharded_parquet(ds_test, out_dir / 'test', main_column='input_ids')
 
 
+def process(filepath):
+    parquet_file = pq.ParquetFile(filepath)
+    # reduce RAM usage
+    for batch in parquet_file.iter_batches(batch_size=8192, columns=['input_ids']):
+        for tokens in batch.to_pandas()['input_ids']:
+            yield torch.tensor(tokens, dtype=torch.int)
+    parquet_file.close()
+
 def main(
-        data_dirs: Annotated[list[Path], typer.Argument()] = DATA_DIRS,
+        data_dirs: Annotated[list[Path], typer.Option()] = [],
         out_dir: Path = DATA_DIR / "tokenized",
         main_splits_dir: Path = MAIN_SPLITS_DIR,
         block_size: int = 2048 + 1,
         chunk_bytes: str = "64MB",
 ):
-    """Tokenize the training datasets and optimize them with litdata.
+    """Tokenize the training datasets, split them into train/val/test subsets
+    and optimize them with litdata.
     
     For the block size, we recommend to use sequence lengths of 2048 + 1
     instead of 8192 + 1 in order to speed up pretraining by a factor of 10-15.
@@ -100,8 +112,10 @@ def main(
     If you are GPU rich and want to avoid doing context length extension again,
     you may consider setting `block_size = 8192 + 1`.
     """
-    # Smaller sequence length -> larger batch size -> faster
     # TODO: enable custom data mixture with resampling
+
+    if not data_dirs:
+        data_dirs = DATA_DIRS
 
     tokenizer = GPT2TokenizerFast.from_pretrained(TOKENIZER_DATA_DIR / 'merged')
 
@@ -121,14 +135,14 @@ def main(
             split_out_dir = out_dir / corpus_name / split.name
 
             #index_parquet_dataset(f"{split}")
-            ds = load_dataset('parquet', data_dir=f'{split}')
+            inputs = [str(p.absolute()) for p in split.glob("*.parquet")]
             optimize(
-                fn=lambda x: x['input_ids'],
-                inputs=ds,
+                fn=process,
+                inputs=inputs,
                 output_dir=f"{split_out_dir}",
                 item_loader=TokensLoader(block_size=block_size),
                 chunk_bytes=chunk_bytes,
-                num_workers=os.cpucount(), #Useful if CUDA available?
+                num_workers=(os.cpu_count() - 2),
             )
 
 
