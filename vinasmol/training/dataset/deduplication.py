@@ -144,8 +144,8 @@ class RensaDeduplicate(BaseFilter):
     def increment_counter(self):
         """Free memory if the pipeline step is finished."""
         self._num_visited += 1
-        if self._num_visited == len(self.rensa_index._minhashes):
-            self.clear()
+        #if self._num_visited == len(self.rensa_index._minhashes):
+        #    self.clear()
 
     def filter(self, document: Document) -> bool | tuple[bool, str]:
         if document.id in self._to_remove:

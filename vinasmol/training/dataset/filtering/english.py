@@ -176,15 +176,15 @@ document_dedup_stage = LocalPipelineExecutor(
             rensa_index=rensa_index,
             exclusion_writer=JsonlWriter(f"{FILTERING_REMOVED_DIR}/8_dedup/{CORPUS}")
         ),
-        PerplexityFilterWithWhitelist(
-            stats_dir=PPL_STAT_DIR,
-            stat_name=PPL_STAT_NAME,
-            quantiles=(0.2, 0.8),
-            keep_fraction=0.1,
-            seed=20250825,
-            domain_whitelist=PPL_WHITELIST,
-            exclusion_writer=JsonlWriter(f"{FILTERING_REMOVED_DIR}/9_perplexity/{CORPUS}"),
-        ),
+        # PerplexityFilterWithWhitelist(
+        #     stats_dir=PPL_STAT_DIR,
+        #     stat_name=PPL_STAT_NAME,
+        #     quantiles=(0.2, 0.8),
+        #     keep_fraction=0.1,
+        #     seed=20250825,
+        #     domain_whitelist=PPL_WHITELIST,
+        #     exclusion_writer=JsonlWriter(f"{FILTERING_REMOVED_DIR}/9_perplexity/{CORPUS}"),
+        # ),
         RetainMetadata(fields_to_keep=[
             'origin',
             'url',
