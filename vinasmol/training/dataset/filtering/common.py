@@ -36,7 +36,7 @@ class JsonlShard(PipelineStep):
         with self.track_time("shard_jsonl"):
             ds = load_dataset('json', data_dir=self.input_folder, split='train')
             for i in range(self.num_shards):
-                shard = ds.shard(self.num_shards, i, keep_in_memory=True)
+                shard = ds.shard(self.num_shards, i)
                 file = Path(self.output_folder) / f"part-{i:04}.jsonl.gz"
                 shard.to_json(f"{file}")
 

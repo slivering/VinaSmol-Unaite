@@ -292,6 +292,15 @@ final_stage = LocalPipelineExecutor(
         #     tokenizer_name_or_path=VIETNAMESE_TOKENIZER,
         #     language=Languages.vietnamese,
         # ),
+
+        # FIXME: performance/security issues?
+        # Possibly use scrubadub for more in-depth cleaning (beware of performance)
+        PIIFormatter(),
+        ParquetWriter(f"{MAIN_OUTPUT_DIR}/deduped/{CORPUS}"),
+
+        # TODO: shard each of them into their original datasets (for finegrained mixture)
+        # TODO: compute stats in a separate stage
+
         DocStats(
             f"{STATS_DIR}/docs",
             top_k_config=top_k_config,
@@ -322,12 +331,6 @@ final_stage = LocalPipelineExecutor(
             tokenizer_name_or_path=VIETNAMESE_TOKENIZER,
             top_k_config=top_k_config,
         ),
-
-        # FIXME: performance/security issues?
-        # Possibly use scrubadub for more in-depth cleaning (beware of performance)
-        PIIFormatter(),
-        ParquetWriter(f"{MAIN_OUTPUT_DIR}/deduped/{CORPUS}"),
-        # TODO: shard each of them into their original datasets
     ],
     tasks=48,
     workers=16,
