@@ -5,6 +5,23 @@ model_name: VinaSmol-360M # from patch_config.py
 # A ``litgpt.Config`` object to define the model architecture. Mutually exclusive with
 # ``model_config``. (type: Optional[Config], default: null)
 model_config:
+  name: VinaSmol-360M
+  hf_config: {}
+  block_size: 8192
+  vocab_size:
+  padded_vocab_size:
+  n_layer: 32
+  n_head: 15
+  n_query_groups: 5
+  n_embd: 960
+  rotary_percentage: 1.0
+  parallel_residual: false
+  bias: false
+  norm_class_name: RMSNorm
+  mlp_class_name: LLaMAMLP
+  intermediate_size: 2560
+  rope_base: 100000
+  norm_eps: 1e-5
 
 # Directory in which to save checkpoints and logs. If running in a Lightning Studio Job, look for it in
 # /teamspace/jobs/<job-name>/share. (type: <class 'Path'>, default: out/pretrain)
