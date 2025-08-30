@@ -1,0 +1,9 @@
+[project]
+name = "vinasmol_datamodule"
+version = "0.1.0"
+description = "Vietnamese brought to SmolLM 360M"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "litgpt[extra]>=0.5",
+]

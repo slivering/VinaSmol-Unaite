@@ -42,7 +42,7 @@ resume: false
 
 # Data-related arguments. If not provided, the default is ``litgpt.data.TinyLlama``.
 data:
-  class_path: datamodule.SmolLMDataModule
+  class_path: vinasmol_datamodule.VinaSmolData
   init_args:
     data_path: ./dataset/data/tokenized
 

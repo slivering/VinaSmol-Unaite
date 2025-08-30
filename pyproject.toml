@@ -18,6 +18,7 @@ dependencies = [
     "loguru",
     "matplotlib",
     "pandas",
+    "polars",
     "pypandoc",
     "python-dotenv",
     "pyvi",
@@ -31,7 +32,7 @@ dependencies = [
     "torch",
     "transformers",
     "typer",
-    "polars",
+    "vinasmol_datamodule",
 ]
 
 [dependency-groups]
@@ -43,4 +44,12 @@ dev = [
     "licensecheck",
     "notebook",
     "ruff",
+]
+
+[tool.uv.sources]
+vinasmol_datamodule = { workspace = true }
+
+[tool.uv.workspace]
+members = [
+  "vinasmol_datamodule"
 ]

@@ -10,6 +10,12 @@ resolution-markers = [
     "python_full_version < '3.14' and sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32'",
 ]
 
+[manifest]
+members = [
+    "vinasmol",
+    "vinasmol-datamodule",
+]
+
 [[package]]
 name = "absl-py"
 version = "2.3.1"
@@ -4952,6 +4958,7 @@ dependencies = [
     { name = "torch" },
     { name = "transformers" },
     { name = "typer" },
+    { name = "vinasmol-datamodule" },
 ]
 
 [package.dev-dependencies]
@@ -4994,6 +5001,7 @@ requires-dist = [
     { name = "torch" },
     { name = "transformers" },
     { name = "typer" },
+    { name = "vinasmol-datamodule", editable = "vinasmol_datamodule" },
 ]
 
 [package.metadata.requires-dev]
@@ -5006,6 +5014,17 @@ dev = [
     { name = "notebook" },
     { name = "ruff" },
 ]
+
+[[package]]
+name = "vinasmol-datamodule"
+version = "0.1.0"
+source = { editable = "vinasmol_datamodule" }
+dependencies = [
+    { name = "litgpt", extra = ["extra"] },
+]
+
+[package.metadata]
+requires-dist = [{ name = "litgpt", extras = ["extra"], specifier = ">=0.5" }]
 
 [[package]]
 name = "warcio"

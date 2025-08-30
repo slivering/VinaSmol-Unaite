@@ -7,15 +7,13 @@ from torch.utils.data import DataLoader
 from litgpt.data import DataModule
 from litgpt.tokenizer import Tokenizer
 
-from .dataset import DATA_DIR
-
 @dataclass
-class SmolLMDataModule(DataModule):
+class VinaSmolData(DataModule):
     """A mix of Vietnamese, English and code datasets with training and validation dataloaders."""
 
     data_path: Union[str, Path] = Path("data/")
     seed: int = 20250828
-    num_workers: int = 8
+    num_workers: int = 16
 
     batch_size: int = field(init=False, repr=False, default=1)
     seq_length: int = field(init=False, repr=False, default=2048)
@@ -128,22 +126,15 @@ class SmolLMDataModule(DataModule):
             code_val_data,
         ]
         val_data = CombinedStreamingDataset(
-            datasets=val_datasets, seed=self.seed, iterate_over_all=False
+            datasets=val_datasets,
+            seed=self.seed,
+            iterate_over_all=False,
         )
         val_dataloader = StreamingDataLoader(
-            val_data, batch_size=self.batch_size, pin_memory=True, num_workers=self.num_workers, drop_last=True
+            val_data,
+            batch_size=self.batch_size,
+            pin_memory=True,
+            num_workers=self.num_workers,
+            drop_last=True,
         )
         return val_dataloader
-
-
-if __name__ == '__main__':
-    data_path = DATA_DIR / 'deduped' / 'splits'
-    data_module = SmolLMDataModule(
-        data_path=data_path,
-    )
-    data_module.batch_size = 32
-    
-    for batch in data_module.train_dataloader():
-        print(len(batch['input_ids']))
-        print(sum(map(len, batch['input_ids'])))
-        pass

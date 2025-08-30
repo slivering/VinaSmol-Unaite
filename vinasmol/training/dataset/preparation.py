@@ -8,7 +8,6 @@ from litdata import optimize, TokensLoader
 from loguru import logger
 import pyarrow.parquet as pq
 import torch
-from tqdm import tqdm
 from transformers import GPT2TokenizerFast, PreTrainedTokenizerFast
 import typer
 
