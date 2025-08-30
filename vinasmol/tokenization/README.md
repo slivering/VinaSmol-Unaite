@@ -12,7 +12,7 @@ The Vietnamese datasets need to have been preprocessed, filtered and deduplicate
 python -m vinasmol.tokenization.training \
     vinasmol/training/dataset/data/deduped/vi-all \
     --tokenizer-out-dir vinasmol/tokenization/data \
-    --vietnamese-vocab-size 10000
+    --vietnamese-max-vocab-size 20000
 python -m vinasmol.tokenization.vocab_extension \
     vinasmol/tokenization/data/merged \
     vinasmol/tokenization/data/smollm_extended
@@ -23,8 +23,8 @@ directory specified by `--tokenizer-out-dir`.
 
 > [!NOTE] Terminology
 > 
-> We refer as *new* the tokenizer trained anew on Vietnamese corpora, with of vocabulary size specified by `--vietnamese-vocab-size`.
-> We refer as *merged* the tokenizer with the previous English vocabulary and the added Vietnamese vocabulary from the *new* tokenizer. The number of added tokens is **lower** than `--vietnamese-vocab-size`.
+> We refer as *new* the tokenizer trained anew on Vietnamese corpora, with of vocabulary size specified by `--vietnamese-max-vocab-size`.
+> We refer as *merged* the tokenizer with the previous English vocabulary and the added Vietnamese vocabulary from the *new* tokenizer. The number of added tokens is **lower** than `--vietnamese-max-vocab-size`.
 
 ---
 

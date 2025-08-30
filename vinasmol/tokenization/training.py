@@ -2,6 +2,7 @@ import copy
 import json
 from pathlib import Path
 import random
+import re
 from typing_extensions import Annotated
 
 from datasets import Dataset, load_dataset
@@ -9,17 +10,17 @@ from loguru import logger
 import numpy as np
 from tokenizers.models import BPE
 from tokenizers.implementations import BaseTokenizer, SentencePieceBPETokenizer
-from transformers import GPT2TokenizerFast, PreTrainedTokenizerBase
+from transformers import AddedToken, PreTrainedTokenizerBase
 import typer
 
 from vinasmol.hfmodel import BASE_MODEL # SMOLLM2
-from vinasmol.vietnamese import LETTERS as VIETNAMESE_LETTERS
+from vinasmol import vietnamese
 
 from . import DATA_DIR, number_of_added_tokens
 
 # Default parameters
 # FIXME: adjust this because the actual number of added tokens will be smaller
-VIETNAMESE_VOCAB_SIZE = 10_000
+VIETNAMESE_MAX_VOCAB_SIZE = 20_000
 BATCH_SIZE = 5_000
 DROPOUT_RATE = 0.1
 LIMIT_VIETNAMESE_ALPHABET = 500
@@ -71,7 +72,7 @@ def generate_training_corpus(datasets: list[Dataset], batch_size: int, seed):
 # TODO: one sentence = one example?
 def train_vietnamese_tokenizer(
         corpus,
-        vocab_size: int = VIETNAMESE_VOCAB_SIZE,
+        vocab_size: int = VIETNAMESE_MAX_VOCAB_SIZE,
         dropout: float = DROPOUT_RATE,
         limit_alphabet: int = LIMIT_VIETNAMESE_ALPHABET,
         min_frequency: int = 1000,
@@ -92,16 +93,28 @@ def train_vietnamese_tokenizer(
         # We don't need to add the special tokens since only the new tokens
         # will be added to SmolLM's tokenizer
         special_tokens=["<|endoftext|>"],
-        initial_alphabet=VIETNAMESE_LETTERS,
+        initial_alphabet=vietnamese.LETTERS,
         limit_alphabet=limit_alphabet,
         show_progress=True,
     )
     return tokenizer
 
 
+# Leading and trailing punctuation or whitespace
+PUNCT_AND_SPACE_RE = re.compile(r"^[.,?;:)('\"\n ]+|[.,?;:)('\"\n ]+$")
+EN_RE = re.compile(r"[ A-Za-z]+")
+NONALPHA_WHITELIST = ["₫"]
+WORD_WHITELIST = vietnamese.SYLLABLES | {
+    "vn", "VN", "Vn",
+    "VietNam", "Vietnam",
+    "Campuchia",
+    "socola",
+}
+
 def merge_tokenizers(
         base_tokenizer: PreTrainedTokenizerBase,
         new_tokenizer: BaseTokenizer,
+        logging_dir: Path,
     ) -> int:
     """Merge two tokenizers into a base tokenizer.
 
@@ -112,16 +125,73 @@ def merge_tokenizers(
     Returns:
         int: The number of new tokens.
     """
-    new_vocab = [
-        token.replace('Ġ', ' ')
-        for token in new_tokenizer.get_vocab()
-        if not token.isnumeric()
-    ]
-    new_tokens = set(new_vocab) - set(base_tokenizer.get_vocab())
-    return base_tokenizer.add_tokens(list(new_tokens))
+    base_vocab = base_tokenizer.get_vocab()
+    new_vocab = new_tokenizer.get_vocab()
+
+    # A dict preserves the order of insertion
+    vocab_to_add: dict[str, AddedToken] = {}
+
+    dropped_suspicious = []
+
+    # Iterate in order of frequency
+    for token in new_vocab:
+        token = token
+
+        # This excludes numbers, variants of a word with leading/trailing punctuation.
+        if not token.isalpha() and token not in NONALPHA_WHITELIST:
+
+            norm_token = PUNCT_AND_SPACE_RE.sub("", token)
+            if not norm_token.isalpha():
+                continue
+            variants = [
+                norm_token,
+                norm_token.capitalize(),
+                norm_token.lower(),
+            ]
+            # If `norm_token` is a variant of another word that significantly decreases
+            # fertility, keep it.
+            if any(variant in new_vocab or f"Ġ{variant}" for variant in variants):
+                token = norm_token
+            else:
+                continue
+
+        if token.removeprefix('Ġ') in base_vocab:
+            continue
+
+        token = token.replace('Ġ', ' ') # Necessary for added tokens
+        if token not in vocab_to_add:
+            if EN_RE.fullmatch(token):
+                if token.strip().lower() in WORD_WHITELIST:
+                    # https://discuss.huggingface.co/t/add-tokens-breaks-words-when-encoding/21154
+                    vocab_to_add[token] = AddedToken(token, single_word=True)
+                else:
+                    # HACK: mostly prevents English tokens from being affected
+                    # but will be a useless token if it's actually a Vietnamese subword
+                    # Problems with: ['Ng', 'Nh', 'nh']
+                    # Could be fixed by adding merge rules
+                    dropped_suspicious.append(token)
+            else:
+                vocab_to_add[token] = AddedToken(token)
+    
+    logging_dir.mkdir(exist_ok=True)
+    suspicious_file = logging_dir / "dropped_suspicious.json"
+    suspicious_file.write_text(
+        json.dumps(dropped_suspicious, indent=2, ensure_ascii=False)
+    )
+    logger.debug(
+        "Saved {} possible English subwords to {}",
+        len(dropped_suspicious),
+        suspicious_file
+    )
+
+    factor = 128
+    truncated_to_multiple = factor * (len(vocab_to_add) // factor)
+    vocab_to_add = list(vocab_to_add.values())[:truncated_to_multiple]
+    return base_tokenizer.add_tokens(vocab_to_add)
 
 # https://gucci-j.github.io/post/en/vocab-expansion/
 # Haven't made this work yet
+# TODO: https://github.com/huggingface/tokenizers/issues/627#issuecomment-2076489455
 def merge_tokenizers_sp_into_gpt2(
         base_tokenizer: PreTrainedTokenizerBase,
         new_tokenizer: BaseTokenizer,
@@ -191,10 +261,10 @@ def main(
             Path,
             typer.Option(help="The directory to save the merged tokenizer and vocabulary")
         ] = DATA_DIR,
-        vietnamese_vocab_size: Annotated[
+        vietnamese_max_vocab_size: Annotated[
             int,
             typer.Option(help="The vocabulary size of the new Vietnamese tokenizer")
-        ] = VIETNAMESE_VOCAB_SIZE,
+        ] = VIETNAMESE_MAX_VOCAB_SIZE,
         batch_size: int = BATCH_SIZE,
         dropout_rate: float = DROPOUT_RATE,
         limit_vietnamese_alphabet: int = LIMIT_VIETNAMESE_ALPHABET,
@@ -211,7 +281,7 @@ def main(
     # TODO: save intermediate tokenizer states
     new_tokenizer = train_vietnamese_tokenizer(
         corpus,
-        vocab_size=vietnamese_vocab_size,
+        vocab_size=vietnamese_max_vocab_size,
         dropout=dropout_rate,
         limit_alphabet=limit_vietnamese_alphabet,
     )
@@ -224,20 +294,38 @@ def main(
     logger.info("Base tokenizer vocabulary size: {}", len(base_tokenizer))
 
     # Merge into base_tokenizer
-    n_added_tokens = merge_tokenizers(base_tokenizer, new_tokenizer)
-    effective_n_added_tokens = number_of_added_tokens(BASE_MODEL.load_tokenizer(), base_tokenizer)
+    n_added_tokens = merge_tokenizers(
+        base_tokenizer,
+        new_tokenizer,
+        logging_dir=(tokenizer_out_dir / "logs"),
+    )
+    original_tokenizer = BASE_MODEL.load_tokenizer()
+    effective_n_added_tokens = number_of_added_tokens(original_tokenizer, base_tokenizer)
     assert n_added_tokens == effective_n_added_tokens
 
     logger.info("Added {} new tokens", n_added_tokens)
 
-    logger.debug("Test:")
-
-    s = "Việt Nam, quốc hiệu đầy đủ là Cộng hòa xã hội chủ nghĩa Việt Nam, là một quốc gia nằm ở cực Đông của bán đảo Đông Dương thuộc khu vực Đông Nam Á, giáp với Lào, Campuchia, Trung Quốc, biển Đông và vịnh Thái Lan"
-    logger.debug(s)
-    logger.debug(
-        "{}",
-        [base_tokenizer.decode(token) for token in base_tokenizer(s)['input_ids']]
-    )
+    logger.debug("Tests:")
+    tests = [
+        "Arch Linux is an independently developed, x86-64 general-purpose GNU/Linux "
+        "distribution that strives to provide the latest stable versions of most software "
+        "by following a rolling release model.",
+        "Việt Nam, quốc hiệu đầy đủ là Cộng hòa xã hội chủ nghĩa Việt Nam, "
+        "là một quốc gia nằm ở cực Đông của bán đảo Đông Dương thuộc khu vực Đông Nam Á, "
+        "giáp với Lào, Campuchia, Trung Quốc, biển Đông và vịnh Thái Lan"
+    ]
+    for s in tests:
+        logger.debug(s)
+        new_encoding = base_tokenizer(s)['input_ids']
+        old_encoding = original_tokenizer(s)['input_ids']
+        logger.debug(
+            "New ({} tokens): {}", len(new_encoding),
+            [base_tokenizer.decode(token) for token in new_encoding]
+        )
+        logger.debug(
+            "Old ({} tokens): {}", len(old_encoding),
+            [base_tokenizer.decode(token) for token in old_encoding]
+        )
 
     # TODO: make the added tokens like part of the vocabulary
     # Performance impact on tokenizer loaded with GPT2TokenizerFast.from_pretrained??

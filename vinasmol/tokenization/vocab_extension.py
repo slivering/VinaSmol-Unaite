@@ -20,7 +20,10 @@ def is_vietnamese_token(decoded_token: str) -> bool:
     """Returns whether a token is made out of Vietnamese syllables."""
     # TODO: get the list of words that contain the token -> embeddings -> average
     # possibly use notion of distance (but test before implementing that)
-    return all(syllable in SYLLABLES for syllable in decoded_token.split())
+    return all(
+        syllable in SYLLABLES
+        for syllable in decoded_token.strip().lower().split()
+    )
 
 def find_vietnamese_tokens(
         tokenizer: PreTrainedTokenizerBase,
@@ -44,23 +47,39 @@ def find_vietnamese_tokens(
 
 
 def vietnamese_to_english(inputs: list[str]) -> list[str]:
-    """Translate a list of Vietnamese inputs to English."""
+    """Translate a list of Vietnamese words to English."""
     tokenizer = ENVIT5.load_tokenizer()
     model = AutoModelForSeq2SeqLM.from_pretrained(ENVIT5.name)
     inputs = [f"vi: {input}" for input in inputs]
     tokenized = tokenizer(inputs, return_tensors="pt", padding=True)
     # TODO: cache translations
-    outputs = model.generate(tokenized.input_ids.to(model.device), max_length=32)
+    input_ids = tokenized.input_ids.to(model.device)
+    outputs = model.generate(input_ids, max_length=8)
     translations = tokenizer.batch_decode(
         outputs,
         skip_special_tokens=True,
     )
-    for in_, tr in zip(inputs, translations):
+    for i, (in_, tr) in enumerate(zip(inputs, translations)):
         if not tr.startswith("en: "):
             logger.warning(
                 "EnViT5 English translation did not start with 'en: '. "
                 "model generated '{}' from '{}'", in_, tr,
             )
+        if not tr.removeprefix("en: "):
+            logger.warning(
+                "EnViT5 generated an empty English translation from '{}', retrying",
+                in_
+            )
+            outputs = model.generate(input_ids[None, i, :], max_length=8)
+            tr = tokenizer.batch_decode(
+                outputs,
+                skip_special_tokens=True,
+            )
+            tr = tr[0].removeprefix("en: ")
+            if not tr:
+                logger.warning("Second attempt failed, setting translation to verbatim Vietnamese")
+                tr = in_.removeprefix("vi: ")
+            translations[i] = tr
 
     return [tr.removeprefix("en: ") for tr in translations]
 
@@ -82,7 +101,8 @@ def vietnamese_vocabulary_to_english(
     # A few subword translations won't make sense, but this does not matter.
     translations = vietnamese_to_english(list(vietnamese_tokens.values()))
 
-    token_translations_file = DATA_DIR / "token_translations.txt"
+    token_translations_file = DATA_DIR / "logs" / "token_translations.txt"
+    token_translations_file.parent.mkdir(exist_ok=True, parents=True)
     token_translations_file.write_text("\n".join(
         f"{token}\t{translation}"
         for token, translation in zip(vietnamese_tokens.values(), translations)
