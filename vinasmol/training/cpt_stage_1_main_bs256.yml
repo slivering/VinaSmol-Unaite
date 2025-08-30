@@ -32,13 +32,13 @@ precision: bf16-mixed
 
 # Optional path to a checkpoint directory to initialize the model from.
 # Useful for continued pretraining. Mutually exclusive with ``resume``. (type: Optional[Path], default: null)
-initial_checkpoint_dir: ../tokenization/data/smollm_extended
+initial_checkpoint_dir:
 
 # Path to a checkpoint directory to resume from in case training was interrupted, or ``True`` to resume
 # from the latest checkpoint in ``out_dir``. An error will be raised if no checkpoint is found. Passing
 # ``'auto'`` will resume from the latest checkpoint but not error if no checkpoint exists.
 # (type: Union[bool, Literal["auto"], Path], default: False)
-resume: false
+resume: auto
 
 # Data-related arguments. If not provided, the default is ``litgpt.data.TinyLlama``.
 data:
@@ -50,13 +50,13 @@ data:
 # Training-related arguments. See ``litgpt.args.TrainArgs`` for details
 train:
   # Number of optimizer steps between saving checkpoints (type: Optional[int], default: 1000)
-  save_interval: 100
+  save_interval: 500
 
   # Number of iterations between logging calls (type: int, default: 1)
   log_interval: 1
 
   # Number of samples between optimizer steps across data-parallel ranks (type: int, default: 512)
-  global_batch_size: 64
+  global_batch_size: 256
 
   # Number of samples per data-parallel rank (type: int, default: 4)
   micro_batch_size: 2

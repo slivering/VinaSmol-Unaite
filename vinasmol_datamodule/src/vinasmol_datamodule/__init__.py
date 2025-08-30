@@ -13,7 +13,7 @@ class VinaSmolData(DataModule):
 
     data_path: Union[str, Path] = Path("data/")
     seed: int = 20250828
-    num_workers: int = 16
+    num_workers: int = 4
 
     batch_size: int = field(init=False, repr=False, default=1)
     seq_length: int = field(init=False, repr=False, default=2048)

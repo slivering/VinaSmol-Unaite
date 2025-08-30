@@ -57,6 +57,19 @@ model_config:
   ...
   vocab_size: 55936 # Adjust with the actual vocabulary size of the merged tokenizer
   padded_vocab_size: 55936
+  ...
+
+data:
+  class_path: vinasmol_datamodule.VinaSmolData
+  init_args:
+    num_workers: 4 # Increase if GPU utilization is not 100%
+
+train:
+  global_batch_size: 128
+  ...
+  micro_batch_size: 2 # Should work with 20 GB VRAM, adjust if needed
+  ...
+  max_seq_length: 2048
 ```
 
 The training pipeline can then be started with the following commands:
