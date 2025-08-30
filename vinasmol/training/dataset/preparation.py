@@ -5,8 +5,10 @@ from typing import Annotated
 
 from datasets import load_dataset
 from litdata import optimize, TokensLoader
+from loguru import logger
 import pyarrow.parquet as pq
 import torch
+from tqdm import tqdm
 from transformers import GPT2TokenizerFast, PreTrainedTokenizerFast
 import typer
 
@@ -43,11 +45,11 @@ def tokenize_examples(
     It is necessary since SmolLM2 was trained with them.
     """
     # No need to return as np/pt since we append and concatenate the whole sequence
+    # TODO: suppress warnings about sequence length by splitting and recombining long examples
     tokens_batch = tokenizer(
         examples['text'],
         add_special_tokens=False,
         return_attention_mask=False,
-        max_length=200_000, # suppresses warnings abount sequence length
     )['input_ids']
 
     if add_bos_eos:
@@ -68,6 +70,7 @@ def tokenize_to_parquet_splits(
         tokenizer: PreTrainedTokenizerFast,
     ):
     ds = load_dataset('parquet', split='train', data_dir=f"{data_dir}")
+    logger.info("Starting tokenization")
     ds = ds.map(
         partial(tokenize_examples, tokenizer=tokenizer),
         batched=True,
@@ -83,6 +86,8 @@ def tokenize_to_parquet_splits(
     test_split = train_split['test'].train_test_split(test_size=0.5)
     ds_val = test_split['train']
     ds_test = test_split['test']
+
+    logger.info("Saving splits to sharded Parquet files")
     to_sharded_parquet(ds_train, out_dir / 'train', main_column='input_ids')
     to_sharded_parquet(ds_val, out_dir / 'val', main_column='input_ids')
     to_sharded_parquet(ds_test, out_dir / 'test', main_column='input_ids')
@@ -125,14 +130,16 @@ def main(
         for data_dir in data_dirs
     ]
     
-    for data_dir, out_dir in zip(data_dirs, splits_dirs):
-        tokenize_to_parquet_splits(data_dir, out_dir=out_dir, tokenizer=tokenizer)
+    for data_dir, tokenized_dir in zip(data_dirs, splits_dirs):
+        logger.info("Tokenizing Parquet dataset at {}", data_dir)
+        tokenize_to_parquet_splits(data_dir, out_dir=tokenized_dir, tokenizer=tokenizer)
 
     for splits_dir in splits_dirs:
         corpus_name = splits_dir.name
 
-        for split in splits_dir.iterdir():
+        for split in list(splits_dir.iterdir()):
             split_out_dir = out_dir / corpus_name / split.name
+            logger.info("Optimizing Parquet split at {} to {}", split, split_out_dir)
 
             #index_parquet_dataset(f"{split}")
             inputs = [str(p.absolute()) for p in split.glob("*.parquet")]

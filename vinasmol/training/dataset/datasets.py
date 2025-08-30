@@ -1,6 +1,8 @@
 from pathlib import Path
 
 from datasets import Dataset, IterableDataset, enable_progress_bars, load_dataset
+from loguru import logger
+from tqdm import tqdm
 
 from ...hfmodel import BASE_MODEL, SMOLLM2, LUCIE
 from . import DATA_DIR, DATA_DIR_CODE, DATA_DIR_EN, DATA_DIR_VI
@@ -20,7 +22,16 @@ MIN_PYTHON_EDU_SCORE = 3
 
 def estimate_dataset_size(dataset: Dataset, text_column: str = 'text') -> int:
     """Estimate the number of bytes to store the text column as compressed Parquet."""
-    return int(0.5 * sum(map(len, dataset[text_column])))
+    n_chars = 0.0
+    # TODO: https://github.com/huggingface/datasets/pull/5533#issuecomment-2498180088
+    batches = dataset.select_columns(text_column).iter(batch_size=1_000)
+    n_batches = (len(dataset) - 1) // 1_000 + 1
+    for batch in tqdm(batches, desc="Estimate dataset size", total=n_batches):
+        texts = batch[text_column]
+        n_chars += sum(len(t) for t in texts)
+
+    # 1 char = 2 bytes in general
+    return int(0.5 * n_chars)
 
 def to_sharded_parquet(
         dataset: Dataset | IterableDataset,
@@ -40,6 +51,8 @@ def to_sharded_parquet(
         files (list[Path]): The list of shards paths.
     """
     if isinstance(dataset, IterableDataset):
+        # FIXME: this is very memory-inefficient
+        logger.warning("Converting IterableDataset to list")
         dataset = Dataset.from_list(list(dataset), features=dataset.features)
 
     dir = Path(dir)
@@ -48,7 +61,7 @@ def to_sharded_parquet(
 
     files = []
     for i in range(num_shards):
-        shard = dataset.shard(num_shards, i, keep_in_memory=True)
+        shard = dataset.shard(num_shards, i)
         file = dir / f"part-{i:04}.parquet"
         shard.to_parquet(file)
         files.append(file)
