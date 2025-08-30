@@ -41,21 +41,27 @@ For the output embeddings of the new tokens, Kim et al. suggest to initialize th
 - A SmolLM2-360M checkpoint with extended vocabulary ([instructions here](../tokenization/README.md#extend-smollms-vocabulary-with-vietnamese))
 - The prepared Vietnamese, English and code datasets ([instructions here](./dataset/README.md#prepare-data-for-training))
 
-Edit the `cpt_stage_1_main.yml` and update the model architecture:
+
+First, convert the SmolLM2-360M weights & tokenizer to a litgpt checkpoint:
+
+```yml
+litgpt convert_to_litgpt --model_name SmolLM2-360M vinasmol/tokenization/data/smollm_extended
+```
+
+Edit the files `vinasmol/tokenization/data/smollm_extended/model_config.yaml` and `cpt_stage_1_main.yml` to update the following fields:
 
 ```yml
 model_config:
+  name: VinaSmol-360M
+  hf_config: {}
   ...
-  vocab_size: <vocabulary size of SmolLM2-360 extended here>
-  padded_vocab_size: <vocabulary size of SmolLM2-360 extended here>
+  vocab_size: 55936 # Adjust with the actual vocabulary size of the merged tokenizer
+  padded_vocab_size: 55936
 ```
 
 The training pipeline can then be started with the following commands:
 
 ```bash
-# Convert the SmolLM2-360M weights & tokenizer to a litgpt checkpoint
-litgpt convert_to_litgpt --model_name SmolLM2-360M vinasmol/tokenization/data/smollm_extended
-
 cd vinasmol/training
 # Start initial continued pretraining with sequences of length 2048
 bash cpt_stage_1_main.sh

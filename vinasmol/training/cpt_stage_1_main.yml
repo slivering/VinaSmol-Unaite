@@ -1,6 +1,6 @@
 # The name of the model to pretrain. Choose from names in ``litgpt.config``. Mutually exclusive with
 # ``model_config``. (type: Optional[str], default: null)
-model_name: VinaSmol-360M # from patch_config.py
+model_name:
 
 # A ``litgpt.Config`` object to define the model architecture. Mutually exclusive with
 # ``model_config``. (type: Optional[Config], default: null)
@@ -8,8 +8,8 @@ model_config:
   name: VinaSmol-360M
   hf_config: {}
   block_size: 8192
-  vocab_size:
-  padded_vocab_size:
+  vocab_size: 55936
+  padded_vocab_size: 55936
   n_layer: 32
   n_head: 15
   n_query_groups: 5
