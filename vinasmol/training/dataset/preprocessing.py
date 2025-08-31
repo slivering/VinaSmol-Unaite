@@ -61,19 +61,7 @@ def convert_mediawiki_to_md(row: dict, lang: str = 'en') -> dict:
         row['text'] = pat.sub("", row['text'])
     return row
 
-
-_DISABLED_PANDOC_MD_EXTENSIONS = [
-    'raw_html',
-    'fenced_divs',
-    'native_divs',
-    'link_attributes',
-    'markdown_attribute',
-    'bracketed_spans',
-    'footnotes',
-]
-
 _MD_LINK_RE = re.compile(r"\[([^\[\]]+)\]\(([^)]+)\)")
-_MD_LINK_WITH_DOUBLE_BRACKETS_RE = re.compile(r"\[\\\[([^\[\]]+)\\\]\]\(([^)]+)\)")
 
 _ABSTRACT_RE = re.compile(r"^Abstract", flags=re.MULTILINE)
 _REFERENCES_RE = re.compile(r"^References|^\*\*References", flags=re.MULTILINE)
@@ -166,12 +154,11 @@ class DatasetNames(StrEnum):
 
     starcoder_python_edu = "JanSchTech/starcoderdata-python-edu-lang-score"
 
-    # Lucie annealing datasets
-    open_web_math = "open-web-math/open-web-math"
+    # Annealing datasets
+    finemath_4plus = "HuggingFaceTB/finemath:finemath-4plus"
     olmocr_pes2o = "allenai/olmOCR-pes2o-0225"
     stackmathqa = "math-ai/StackMathQA:stackmathqa200k"
     flan_v2 = "SirNeural/flan_v2"
-    mathpile_commercial = "GAIR/MathPile_Commercial"
     wikipedia_en = "omarkamali/wikipedia-monthly:20250702.en"
 
     # Lucie pretraining datasets (excerpt)
@@ -211,13 +198,13 @@ class DatasetNames(StrEnum):
         }
         cls._ID_COUNTERS = {name: 0 for name in cls._IDS}
         cls._GLOBAL_ID_COUNTER = 0
-        cls.ENABLED = {
+        cls._ENABLED = {
             SMOLLM2.name: {
                 cls.cosmopedia_v2,
                 cls.fineweb_edu_dedup,
                 cls.starcoder_python_edu,
-                cls.open_web_math,
                 cls.olmocr_pes2o,
+                cls.finemath_4plus,
                 cls.stackmathqa,
                 cls.wikipedia_en,
 
@@ -234,11 +221,10 @@ class DatasetNames(StrEnum):
         cls.ENGLISH = {
             cls.cosmopedia_v2,
             cls.fineweb_edu_dedup,
-            cls.open_web_math,
+            cls.finemath_4plus,
             cls.olmocr_pes2o,
             cls.stackmathqa,
             cls.flan_v2,
-            cls.mathpile_commercial,
             cls.wikipedia_en,
             cls.claire_en,
             cls.gutenberg_en,
@@ -396,14 +382,13 @@ class NormalizeCols:
         )
     
     @staticmethod
-    def open_web_math(row: dict) -> dict:
-        # url, text, date, metadata['warc_path']
+    def finemath_4plus(row: dict) -> dict:
         return dict(
-            id=DatasetNames.open_web_math.generate_row_id(),
+            id=DatasetNames.finemath_4plus.generate_row_id(),
             text=row['text'],
             metadata=dict(
-                **filter_keys(row, ['url', 'date']),
-                **DatasetNames.open_web_math.origin_metadata(),
+                **filter_keys(row, ['url', 'warc_filename', 'score']),
+                **DatasetNames.finemath_4plus.origin_metadata(),
             ),
         )
     
@@ -458,33 +443,6 @@ class NormalizeCols:
                     ['task'],
                 ),
                 **DatasetNames.flan_v2.origin_metadata(),
-            ),
-        )
-    
-    @staticmethod
-    def mathpile_commercial(row: dict) -> dict:
-        # TODO: more preprocessing for arXiv and Wikipedia, for example
-        md_content = pypandoc.convert_text(
-            row['text'],
-            'markdown-' + '-'.join(_DISABLED_PANDOC_MD_EXTENSIONS),
-            format='latex',
-            extra_args=["--wrap=none"],
-        )
-        # Replace links by their texts
-        for pat in [
-                _MD_LINK_RE,
-                _MD_LINK_WITH_DOUBLE_BRACKETS_RE,
-            ]:
-            md_content = replace_md_links_with_text(md_content, pat)
-        
-        return dict(
-            id=DatasetNames.mathpile_commercial.generate_row_id(),
-            text=md_content,
-            metadata=dict(
-                # TODO: find true URL
-                url=f"{DatasetNames.mathpile_commercial.placeholder_domain}/{row['meta']['id']}",
-                **filter_keys(row, ['subset']),
-                **DatasetNames.mathpile_commercial.origin_metadata(str(row['meta']['id'])),
             ),
         )
 

@@ -3,7 +3,8 @@
 > [!NOTE]
 >  This page is a work in progress.
 
-Finetuning aims to improve the capabilities, the response quality and the safety of LLMs.
+We finetune VinaSmol on Vietnamese conversation and instruction data in order to improve its response quality. We also perform English finetuning again as continued pretraining on billions of tokens significantly deteriorates instruction capabilities.
+
 
 ## Recipe
 
@@ -19,25 +20,42 @@ Alternatively, [QDoRa](https://www.answer.ai/posts/2024-04-26-fsdp-qdora-llama3.
 
 Details [here](../merging/README.md).
 
+Alternative: train from SmolLM2-360M base model and add Instruct residual like suggested by [Jindal et al.](https://arxiv.org/abs/2410.10739v1). May not be applicable given that adding a whole new language affects the model much more than domain-specific adaptation.
+
 ## Datasets
 
-We are considering the finetuning datasets below.
+### Vietnamese datasets
 
-### Collections
+- [MURI-IT](https://huggingface.co/datasets/akoksal/muri-it-language-split): Instruction-tuning with reverse instructions generated from [MADLAD-400-3B-MT](https://huggingface.co/google/madlad400-3b-mt)
+- [Vietnamese Multi-turn Chat Alpaca](https://huggingface.co/datasets/lamhieu/alpaca_multiturns_dialogue_vi) (MIT, Apache 2.0)
+- [Vietnamese CosmosQA Google Translated](https://huggingface.co/datasets/5CD-AI/Vietnamese-cosmos-qa-gg-translated), a translated version of [CosmosQA](https://huggingface.co/datasets/allenai/cosmos_qa) (CC-BY)
+
+We are also considering the synthetic math datasets below.
+
+- [Vietnamese OpenMathInstruct-1 Google Translated](https://huggingface.co/datasets/5CD-AI/Vietnamese-nvidia-OpenMathInstruct-1-50k-gg-translated) ([original from Nvidia](https://huggingface.co/datasets/nvidia/OpenMathInstruct-1), from Mixtral-8x7B outputs, permissive Nvidia license)
+- [Vietnamese MetaMathQA Google Translated](https://huggingface.co/datasets/5CD-AI/Vietnamese-395k-meta-math-MetaMathQA-gg-translated) ([original from Meta](https://huggingface.co/datasets/meta-math/MetaMathQA), GPT-3.5 outputs, MIT)
+- [Vietnamese ORCA Math World Problems 200k Google Translated](https://huggingface.co/datasets/5CD-AI/Vietnamese-microsoft-orca-math-word-problems-200k-gg-translated) ([original from Microsoft](https://huggingface.co/datasets/microsoft/orca-math-word-problems-200k), GPT-4 outputs, MIT)
+- https://huggingface.co/datasets/ontocord/viet4all (based on [OpenHermes](https://huggingface.co/datasets/teknium/OpenHermes-2.5), GPT-4 outputs)
+
+### Related Collections
 
 - https://huggingface.co/5CD-AI/collections
 - https://ai.stanford.edu/~sttruong/villm/
 - https://nlp.uit.edu.vn/datasets
 
-### Misc
+### Other miscellaneous datasets considered
 
-- https://huggingface.co/akoksal/muri-it-language-split : Instruction-tuning with reverse instructions
+- https://huggingface.co/datasets/SEACrowd/wikihow_gosc: Wikihow goal-oriented script
+- https://huggingface.co/datasets/SEACrowd/vimmrc : Machine comprehension for common-sense reasoning, aimed at 1-5th graders
 - https://huggingface.co/datasets/vilm/OpenOrca-Viet : Reasoning
-- https://huggingface.co/PaDaS-Lab/webfaq : FAQ (unclean)
-- https://huggingface.co/SEACrowd/bactrian_x : Instruction-response pairs (Google Translated)
-- https://huggingface.co/SEACrowd/xquad : Cross-lingual question answering
-- https://huggingface.co/SEACrowd/belebele : Reading comprehension with multiple choices
-- https://huggingface.co/SEACrowd/wikihow_gosc: Wikihow goal-oriented script
-- https://huggingface.co/SEACrowd/vimmrc : Machine comprehension for common-sense reasoning, aimed at 1-5th graders
-- https://huggingface.co/VTSNLP/base_normal_quality : Toxicity classification
+- https://huggingface.co/datasets/SEACrowd/belebele : Reading comprehension with multiple choices
+
+- https://huggingface.co/datasets/PaDaS-Lab/webfaq : FAQ (unclean)
+- https://huggingface.co/datasets/VTSNLP/base_normal_quality : Toxicity classification
 - https://github.com/ThanhChinhBK/vietnews : News summarizations
+
+### English datasets
+
+We use [Smol-SmalTalk](https://huggingface.co/datasets/HuggingFaceTB/smol-smoltalk) which was used to finetune SmolLM2-360M.
+
+

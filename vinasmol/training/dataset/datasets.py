@@ -20,12 +20,14 @@ SHARD_SIZE = 100_000_000
 
 MIN_PYTHON_EDU_SCORE = 3
 
-def estimate_dataset_size(dataset: Dataset, text_column: str = 'text') -> int:
+def estimate_dataset_size(dataset: Dataset | IterableDataset, text_column: str = 'text') -> int:
     """Estimate the number of bytes to store the text column as compressed Parquet."""
     n_chars = 0.0
     # TODO: https://github.com/huggingface/datasets/pull/5533#issuecomment-2498180088
     batches = dataset.select_columns(text_column).iter(batch_size=1_000)
-    n_batches = (len(dataset) - 1) // 1_000 + 1
+    n_batches = None
+    if hasattr(dataset, '__len__'):
+        n_batches = (len(dataset) - 1) // 1_000 + 1
     for batch in tqdm(batches, desc="Estimate dataset size", total=n_batches):
         texts = batch[text_column]
         n_chars += sum(len(t) for t in texts)
@@ -95,56 +97,6 @@ def download_english_datasets(data_dir: Path):
             .take(1_000_000)
         )
         to_sharded_parquet(fineweb_edu_dedup, data_dir / "fineweb_edu")
-        
-        # Datasets used in the annealing phase of Lucie
-
-        # 27 GB, 6M rows
-        openwebmath = load_dataset("open-web-math/open-web-math", **LOAD_KWARGS)
-        openwebmath = (openwebmath
-            .map(NormalizeCols.open_web_math, remove_columns=openwebmath.column_names)
-            .shuffle(seed=SEED, buffer_size=1000)
-            .take(100_000)
-        )
-        to_sharded_parquet(openwebmath, data_dir / "openwebmath")
-
-        # 42B tokens, 40M rows
-        # Higher-quality and up-to-date pes2o dataset with proper formatting
-        olmocr_pes2o = load_dataset("allenai/olmOCR-pes2o-0225", **LOAD_KWARGS)
-        olmocr_pes2o = (olmocr_pes2o
-            .map(NormalizeCols.olmocr_pes2o, remove_columns=olmocr_pes2o.column_names)
-            .shuffle(seed=SEED, buffer_size=1000)
-            .take(500_000)
-        )
-        to_sharded_parquet(olmocr_pes2o, data_dir / "olmocr_pes2o")
-
-        # TODO: CLI download as per HuggingFace documentation
-        # 10B tokens, 900M rows
-        # Not shuffled, many sources in different shards
-        #mathpile_commercial = load_dataset("GAIR/MathPile_Commercial", token=True, **LOAD_KWARGS)
-        #(mathpile_commercial
-        #    .map(NormalizeCols.mathpile_commercial, remove_columns=mathpile_commercial.column_names)
-        #    .shuffle(seed=SEED, buffer_size=10_000)
-        #    .take(10_000_000)
-        #    .to_parquet(data_dir / "mathpile_commercial.parquet")
-        #)
-
-        # ~200MB, 200k rows
-        stackmathqa = load_dataset("math-ai/StackMathQA", "stackmathqa200k", split="train")
-        stackmathqa = (stackmathqa
-            .map(NormalizeCols.stackmathqa, remove_columns=stackmathqa.column_names)
-            .shuffle(seed=SEED)
-        )
-        to_sharded_parquet(stackmathqa, data_dir / "stackmathqa")
-
-        # ~400GB, ~300M rows
-        # Temporarily excluded because of the large download
-        #flan_v2 = load_dataset("SirNeural/flan_v2", **LOAD_KWARGS)
-        #(flan_v2
-        #    .map(NormalizeCols.flan_v2, remove_columns=flan_v2.column_names)
-        #    .shuffle(seed=SEED, buffer_size=1000)
-        #    .take(500_000)
-        #    .to_parquet(data_dir / "flan_v2.parquet")
-        #)
 
         # ~20GB, 7.03M rows
         wikipedia_en = load_dataset("omarkamali/wikipedia-monthly", "20250702.en", **LOAD_KWARGS)
@@ -177,7 +129,7 @@ def download_english_datasets(data_dir: Path):
         
         # Avoid training a very small model on too many programming languages
         #lucie_training_code = load_dataset("OpenLLM-France/Lucie-Training-Dataset", "code", revision="v1.2", **load_kwargs)
-    
+
     elif BASE_MODEL == LUCIE:
         #config_names = list(load_dataset_builder("OpenLLM-France/Lucie-Training-Dataset").builder_configs)
         # Downsample RedPajamaV2
@@ -186,6 +138,43 @@ def download_english_datasets(data_dir: Path):
     else:
         raise NotImplementedError(BASE_MODEL)
 
+def download_english_annealing_datasets(data_dir: Path):
+        # 10B tokens, 7M rows
+        finemath_4plus = load_dataset("HuggingFaceTB/finemath", "finemath-4plus", **LOAD_KWARGS)
+        finemath_4plus = (finemath_4plus
+            .map(NormalizeCols.finemath_4plus, remove_columns=finemath_4plus.column_names)
+            .shuffle(seed=SEED, buffer_size=1000)
+            .take(100_000)
+        )
+        to_sharded_parquet(finemath_4plus, data_dir / "finemath_4plus")
+
+        # 42B tokens, 40M rows
+        # Higher-quality and up-to-date pes2o dataset with proper formatting
+        olmocr_pes2o = load_dataset("allenai/olmOCR-pes2o-0225", **LOAD_KWARGS)
+        olmocr_pes2o = (olmocr_pes2o
+            .map(NormalizeCols.olmocr_pes2o, remove_columns=olmocr_pes2o.column_names)
+            .shuffle(seed=SEED, buffer_size=1000)
+            .take(500_000)
+        )
+        to_sharded_parquet(olmocr_pes2o, data_dir / "olmocr_pes2o")
+
+        # ~200MB, 200k rows
+        stackmathqa = load_dataset("math-ai/StackMathQA", "stackmathqa200k", split="train")
+        stackmathqa = (stackmathqa
+            .map(NormalizeCols.stackmathqa, remove_columns=stackmathqa.column_names)
+            .shuffle(seed=SEED)
+        )
+        to_sharded_parquet(stackmathqa, data_dir / "stackmathqa")
+
+        # ~400GB, ~300M rows
+        # Temporarily excluded because of the large download
+        #flan_v2 = load_dataset("SirNeural/flan_v2", **LOAD_KWARGS)
+        #(flan_v2
+        #    .map(NormalizeCols.flan_v2, remove_columns=flan_v2.column_names)
+        #    .shuffle(seed=SEED, buffer_size=1000)
+        #    .take(500_000)
+        #    .to_parquet(data_dir / "flan_v2.parquet")
+        #)
 
 def download_code_datasets(data_dir: Path):
     # 5 GB, 3M rows
@@ -284,12 +273,19 @@ def download_vietnamese_datasets(data_dir: Path):
     )
     to_sharded_parquet(vbpl, data_dir / "vbpl")
 
+def download_vietnamese_annealing_datasets(data_dir: Path):
+    # TODO: CCVJ
+    pass
+
 
 if __name__ == "__main__":
     enable_progress_bars()
     DATA_DIR_VI.mkdir(parents=True, exist_ok=True)
     DATA_DIR_EN.mkdir(parents=True, exist_ok=True)
     DATA_DIR_CODE.mkdir(parents=True, exist_ok=True)
+    DATA_DIR_EN_ANNEALING.mkdir(parents=True, exist_ok=True)
+
     download_vietnamese_datasets(DATA_DIR_VI)
     download_english_datasets(DATA_DIR_EN)
     download_code_datasets(DATA_DIR_CODE)
+    download_english_annealing_datasets(DATA_DIR_EN_ANNEALING)

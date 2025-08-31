@@ -69,6 +69,7 @@ output_intermediate_1 = f"{FILTERING_OUTPUT_DIR}/output_1/{CORPUS}"
 output_intermediate_2 = f"{FILTERING_OUTPUT_DIR}/output_2/{CORPUS}"
 output_intermediate_3 = f"{FILTERING_OUTPUT_DIR}/output_3/{CORPUS}"
 es_dir_vi = f"{ES_DIR}/{CORPUS}"
+final_output_dir = f"{MAIN_OUTPUT_DIR}/deduped/{CORPUS}"
 
 main_processing_executor = LocalPipelineExecutor(
     pipeline=[
@@ -296,7 +297,7 @@ final_stage = LocalPipelineExecutor(
         # FIXME: performance/security issues?
         # Possibly use scrubadub for more in-depth cleaning (beware of performance)
         PIIFormatter(),
-        ParquetWriter(f"{MAIN_OUTPUT_DIR}/deduped/{CORPUS}"),
+        ParquetWriter(final_output_dir),
 
         # TODO: shard each of them into their original datasets (for finegrained mixture)
         # TODO: compute stats in a separate stage

@@ -118,9 +118,19 @@ We follow the procedure outlined by [Gao et al.](https://arxiv.org/abs/2410.0266
 
 Following the approach used by [SmolLM2](https://arxiv.org/abs/2502.02737v1), we add high-quality content, technical content, textbooks, medium-sized and [instruction](https://magazine.sebastianraschka.com/p/instruction-pretraining-llms#%C2%A7pretraining-with-instruction-data) datasets during the annealing phase in order to maximize their impact.
 
-The new  high-quality datasets are added for annealing:
-- CCVJ (Vietnamese)
-- OlmOCR-PeS2o, OpenWebMath, StackMathQA (English)
+### Requirements
+
+- The [annealing data mixture](./dataset/README.md#annealing-datasets)
+- The prepared mixture (TODO: add support in preparation.py)
+- The data module (TODO: annealing mix + pretraining mix)
+- A model checkpoint from the initial pretraining phase
+
+The annealing stage can be started with the following command:
+
+```bash
+cd vinasmol/training
+bash cpt_stage_3_annealing.sh
+```
 
 ## Further improvements
 

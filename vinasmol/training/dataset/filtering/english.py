@@ -61,6 +61,7 @@ output_intermediate_1 = f"{FILTERING_OUTPUT_DIR}/output_1/{CORPUS}"
 output_intermediate_2 = f"{FILTERING_OUTPUT_DIR}/output_2/{CORPUS}"
 output_intermediate_3 = f"{FILTERING_OUTPUT_DIR}/output_3/{CORPUS}"
 es_dir_en = f"{ES_DIR}/{CORPUS}"
+final_output_dir = f"{MAIN_OUTPUT_DIR}/{CORPUS}/deduped"
 
 main_processing_executor = LocalPipelineExecutor(
     pipeline=[
@@ -236,7 +237,7 @@ final_stage = LocalPipelineExecutor(
             top_k_config=top_k_config,
         ),
         PIIFormatter(),
-        ParquetWriter(f"{MAIN_OUTPUT_DIR}/{CORPUS}/deduped"),
+        ParquetWriter(final_output_dir),
         # TODO: shard each of them into their original datasets
     ],
     tasks=48,
