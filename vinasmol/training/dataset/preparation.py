@@ -21,6 +21,7 @@ DATA_DIRS = [
     DATA_DIR / "deduped" / "en-all",
     DATA_DIR / "deduped" / "vi-all",
     DATA_DIR / "deduped" / "code-all",
+    DATA_DIR / "deduped" / "annealing-all",
 ]
 
 MAIN_SPLITS_DIR = DATA_DIR / "deduped" / "splits"

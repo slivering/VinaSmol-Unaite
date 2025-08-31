@@ -8,6 +8,8 @@ dependencies = [
     "accelerate",
     "aiohttp",
     "certifi",
+    # FIXME: datasets>=4.0 is necessary for IterableDataset.to_parquet
+    # and for compatibility with new column formats, but is incompatible with litgpt>=0.5
     "datasets",
     "datatrove[io,processing,cli]>=0.6",
     "diskcache",

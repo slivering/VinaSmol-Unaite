@@ -12,6 +12,7 @@ class VinaSmolData(DataModule):
     """A mix of Vietnamese, English and code datasets with training and validation dataloaders."""
 
     data_path: Union[str, Path] = Path("data/")
+    annealing: bool = False
     seed: int = 20250828
     num_workers: int = 4
 
@@ -32,6 +33,9 @@ class VinaSmolData(DataModule):
             self.en_train, self.en_val,
             self.code_train, self.code_val,
         ]
+        if self.annealing:
+            self.annealing_train = self.data_path / "annealing/train"
+            self.annealing_val = self.data_path / "annealing/val"
 
     def connect(
         self, tokenizer: Optional[Tokenizer] = None, batch_size: int = 1, max_seq_length: Optional[int] = None
@@ -81,8 +85,20 @@ class VinaSmolData(DataModule):
             code_train_data,
         ]
 
-        # Mix Vietnamese, English and code data with these proportions
-        weights = (0.55, 0.4, 0.05)
+        if self.annealing:
+            annealing_data = StreamingDataset(
+                input_dir=self.annealing_train,
+                item_loader=TokensLoader(block_size=self.seq_length),
+                shuffle=True,
+                drop_last=True,
+            )
+            train_datasets.append(annealing_data)
+            # TODO: make these weights configurable
+            weights = (0.32, 0.25, 0.03, 0.4)
+        else:
+            weights = (0.55, 0.4, 0.05)
+
+
         train_data = CombinedStreamingDataset(
             datasets=train_datasets,
             seed=self.seed,
@@ -125,6 +141,15 @@ class VinaSmolData(DataModule):
             en_val_data,
             code_val_data,
         ]
+        if self.annealing:
+            annealing_data = StreamingDataset(
+                input_dir=self.annealing_val,
+                item_loader=TokensLoader(block_size=self.seq_length),
+                shuffle=True,
+                drop_last=True,
+            )
+            val_datasets.append(annealing_data)
+
         val_data = CombinedStreamingDataset(
             datasets=val_datasets,
             seed=self.seed,

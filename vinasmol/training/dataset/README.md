@@ -85,6 +85,8 @@ For the initial pretraining phase, we use:
 
 Cosmopedia v2 and FineWebEdu are both part of SmolLM's training corpus. Due to the large size of these datasets and the small size of SmolLM2-360M, we inferred that the risk of overfitting was low enough to include them as replay datasets.
 
+FIXME: Cosmopedia should have been an annealing dataset
+
 ### Code datasets
 
 Similar to English, we add code datasets in order to preserve SmolLM's performance on programming tasks. As a strategic choice due to limited resources, we choose to focus on Python in order to limit the number of programming languages in the corpus.
@@ -112,12 +114,12 @@ For the annealing phase, we keep 60 % of the mixture with the proportions in the
 - [FineMath 4+](https://huggingface.co/datasets/HuggingFaceTB/finemath)
 - [StackMathQA](https://huggingface.co/datasets/math-ai/StackMathQA)
 
-TODO: textbooks and lareg Vietnamese instruction datasets
+TODO: textbooks and large Vietnamese instruction datasets
 
 The annealing mixture can be created by the following command:
 
 ```python
-pytohn -m vinasmol.training.dataset.annealing_data
+python -m vinasmol.training.dataset.annealing_data
 ```
 
 ### Training budget

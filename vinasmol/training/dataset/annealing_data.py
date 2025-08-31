@@ -2,6 +2,7 @@ from functools import partial
 from pathlib import Path
 
 from datasets import IterableDataset, load_dataset, interleave_datasets
+from loguru import logger
 import numpy as np
 import typer
 
@@ -21,9 +22,9 @@ def subset_from_filtered_data(data_dir: Path, subset_name: str) -> IterableDatas
     Returns:
         IterableDataset: the processed subset.
     """
-    corpus = load_dataset(path=data_dir, split='train')
+    corpus = load_dataset(path=f'{data_dir}', split='train', streaming=True)
     return corpus.filter(
-        lambda row: row['metadata']['origin'] == subset_name,
+        lambda metadata: metadata['origin'] == subset_name,
         input_columns='metadata',
     )
 
@@ -34,11 +35,15 @@ def strip_metadata_to(row: dict, fields_to_keep: list[str]) -> dict:
         row (dict): A dataset row.
         fields_to_keep (list[str], optional): The list of metadata fields to keep.
     """
-    row['metadata'] = {
+    metadata = {
         key: row['metadata'].get(key)
         for key in fields_to_keep
     }
-    return row
+    return dict(
+        id=row['id'],
+        text=row['text'],
+        metadata=metadata,
+    )
 
 def main(
     out_dir: Path = ANNEALING_OUT_DIR,
@@ -54,19 +59,24 @@ def main(
 
     # We don't filter those datasets as they are already high-quality and rather clean
     finemath_4plus = load_dataset(
-        DATA_DIR_EN_ANNEALING / "finemath_4plus",
+        f"{DATA_DIR_EN_ANNEALING}/finemath_4plus",
         split='train',
         streaming=True,
     )
     stackmathqa = load_dataset(
-        DATA_DIR_EN_ANNEALING / "stackmathqa",
+        f"{DATA_DIR_EN_ANNEALING}/stackmathqa",
         split='train',
         streaming=True,
     )
 
     # We assume that the datasets are (mostly) disjoint and already shuffled
     all_subsets: list[IterableDataset] = [
-        subset.map(partial(strip_metadata_to, fields_to_keep=['origin', 'url']))
+        subset.map(
+            partial(strip_metadata_to, fields_to_keep=['origin', 'url']),
+            remove_columns=list(set(subset.column_names) - {'id', 'text'})
+        )
+        # TODO: add pretraining datasets but with different subsets and same proportions
+        # to avoid training on the same examples
         for subset in [
             wikipedia_en,
             gutenberg_en,
@@ -96,10 +106,14 @@ def main(
         seed=SEED,
         stopping_strategy='all_exhausted',
     )
-    # FIXME: this will convert to a list eagerly
-    to_sharded_parquet(annealing_mix.take(2_000_000), out_dir)
+    # FIXME: only to cache dataset, triplicates disk usage
+    cache_file = DATA_DIR / "annealing_mix.parquet"
+    logger.info("Caching annealing mix to {}", cache_file)
+    annealing_mix.take(20_000).to_parquet(f"{cache_file}")
+    annealing_mix = load_dataset('parquet', data_files=f"{cache_file}")
+    logger.info("Saving sharded annealing mix to {}", cache_file)
+    to_sharded_parquet(annealing_mix, out_dir)
 
-    # TODO: combine all of these datasets with good proportions
 
 if __name__ == '__main__':
     typer.run(main)

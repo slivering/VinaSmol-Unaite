@@ -120,9 +120,7 @@ Following the approach used by [SmolLM2](https://arxiv.org/abs/2502.02737v1), we
 
 ### Requirements
 
-- The [annealing data mixture](./dataset/README.md#annealing-datasets)
-- The prepared mixture (TODO: add support in preparation.py)
-- The data module (TODO: annealing mix + pretraining mix)
+- The [annealing data mixture](./dataset/README.md#annealing-datasets), prepared
 - A model checkpoint from the initial pretraining phase
 
 The annealing stage can be started with the following command:
