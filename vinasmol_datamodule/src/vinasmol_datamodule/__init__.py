@@ -4,7 +4,7 @@ from typing import Optional, Union
 
 from torch.utils.data import DataLoader
 
-from litgpt.data import DataModule
+from litgpt.data import DataModule, SFTDataset, Alpaca, Deita, deita
 from litgpt.tokenizer import Tokenizer
 
 @dataclass
@@ -163,3 +163,59 @@ class VinaSmolData(DataModule):
             drop_last=True,
         )
         return val_dataloader
+
+@dataclass
+class AlpacaVi(Alpaca):
+    file_url: str = "https://huggingface.co/datasets/tsdocode/vi_alpaca_clean/resolve/main/vi_alpaca_data.json"
+
+    file_name: str = "vi_alpaca_data.json"
+
+    download_dir: Path = Path("./data/vi_alpaca_clean")
+
+@dataclass
+class MultiTurnAlpacaVi(Deita):
+    """Vietnamese multi-turn Alpaca data module for supervised finetuning."""
+
+    download_dir: Path = Path("./data/vi_multi_turn_alpaca")
+
+    repo_id: str = "lamhieu/alpaca_multiturns_dialogue_vi"
+
+    val_split_fraction: float = 0.078758 # Get exactly 1000 examples
+
+    def prepare_data(self) -> None:
+        from datasets import load_dataset
+
+        load_dataset(self.repo_id, split='train', cache_dir=self.download_dir)
+
+    def setup(self, stage: str = "") -> None:
+        from datasets import load_dataset
+
+        train_val_split = load_dataset(self.repo_id, split='train').train_test_split(
+            test_size=self.val_split_fraction,
+            seed=self.seed,
+        )
+        train_data = deita.format_dataset(
+            train_val_split['train'],
+            self.include_multiturn_conversations,
+        )
+        test_data = deita.format_dataset(
+            train_val_split['test'],
+            self.include_multiturn_conversations,
+        )
+
+        self.train_dataset = SFTDataset(
+            data=train_data,
+            tokenizer=self.tokenizer,
+            prompt_style=self.prompt_style,
+            max_seq_length=self.max_seq_length,
+            mask_prompt=self.mask_prompt,
+            ignore_index=self.ignore_index,
+        )
+        self.test_dataset = SFTDataset(
+            data=test_data,
+            tokenizer=self.tokenizer,
+            prompt_style=self.prompt_style,
+            max_seq_length=self.max_seq_length,
+            mask_prompt=self.mask_prompt,
+            ignore_index=self.ignore_index,
+        )

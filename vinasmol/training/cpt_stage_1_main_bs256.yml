@@ -46,6 +46,7 @@ data:
   init_args:
     num_workers: 4 # Increase if GPU utilization is not 100%
     data_path: ./dataset/data/tokenized
+    annealing: false
 
 # Training-related arguments. See ``litgpt.args.TrainArgs`` for details
 train:
@@ -108,7 +109,7 @@ optimizer:
 
   init_args:
     #   (type: float, default: 0.001)
-    lr: 1e-4 # SmolLM2-360M was 3e-3.
+    lr: 2e-4
 
     #   (type: float, default: 0.01)
     weight_decay: 0.1

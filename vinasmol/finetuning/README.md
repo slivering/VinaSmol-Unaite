@@ -5,6 +5,25 @@
 
 We finetune VinaSmol on Vietnamese conversation and instruction data in order to improve its response quality. We also perform English finetuning again as continued pretraining on billions of tokens significantly deteriorates instruction capabilities.
 
+## Run
+
+### Requirements
+
+- [A converted pre-training checkpoint](../training/README.md#checkpoint-conversion)
+
+### Finetuning runs
+
+Finetune the base model on multiple chat and instruction datasets:
+
+```bash
+cd vinasmol/finetuning
+litgpt finetune_lora --config ./vi_alpaca.yml
+litgpt finetune_lora --config ./vi_multi_turn_alpaca.yml
+```
+
+### Merge
+
+TODO: mergekit and link to [merging/](../merging/README.md)
 
 ## Recipe
 
@@ -26,7 +45,8 @@ Alternative: train from SmolLM2-360M base model and add Instruct residual like s
 
 ### Vietnamese datasets
 
-- [MURI-IT](https://huggingface.co/datasets/akoksal/muri-it-language-split): Instruction-tuning with reverse instructions generated from [MADLAD-400-3B-MT](https://huggingface.co/google/madlad400-3b-mt)
+- [MURI-IT](https://huggingface.co/datasets/akoksal/muri-it-language-split): Instruction-tuning with reverse instructions generated from [MADLAD-400-3B-MT](https://huggingface.co/google/madlad400-3b-mt), 25k rows
+- [vi_alpaca_clean](https://huggingface.co/datasets/tsdocode/vi_alpaca_clean) (CC-BY, 28k rows), [alternative](https://huggingface.co/datasets/Chat-Error/Vietnamese_x_Alpaca)
 - [Vietnamese Multi-turn Chat Alpaca](https://huggingface.co/datasets/lamhieu/alpaca_multiturns_dialogue_vi) (MIT, Apache 2.0)
 - [Vietnamese CosmosQA Google Translated](https://huggingface.co/datasets/5CD-AI/Vietnamese-cosmos-qa-gg-translated), a translated version of [CosmosQA](https://huggingface.co/datasets/allenai/cosmos_qa) (CC-BY)
 

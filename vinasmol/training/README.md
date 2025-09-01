@@ -3,38 +3,9 @@
 > [!NOTE]
 >  This page is a work in progress.
 
-## Training data
+## Run
 
-Details [here](./dataset/README.md).
-
-## Framework
-
-We use [litgpt](https://github.com/Lightning-AI/litgpt) for continued pretraining, which supports SmolLM2-360M.
-
-In order to follow the multi-stage training of EEVE, we customize the [continued pretraining recipe of litgpt](https://github.com/Lightning-AI/litgpt/blob/main/tutorials/pretrain.md#continued-pretraining-on-custom-data) by freezing the adequate parameters before the training starts.
-
-## Recipe
-
-### Vocabulary extension
-
-We use the [Efficient and Effective Vocabulary Extension](https://arxiv.org/abs/2402.14714v1) method (EEVE), which encompasses both tokenization and training.
-
-#### Tokenizer training
-
-We train a new tokenizer on Vietnamese corpora and extend the base tokenizer with the new tokens. Details for running tokenizer training, merging, vocabulary extension and embedding initialization can be found [here](../tokenization/README.md).
-
-#### Embedding initialization
-
-For the input embeddings of the new Vietnamese tokens, we use the average embeddings of their subword tokens (default in the `tokenizers` library, as in [Hewitt](https://nlp.stanford.edu/~johnhew/vocab-expansion.html)). Whenever possible, we use a convex combination of the initialized embedding and the embedding of their translation using [EnViT5-base](https://huggingface.co/VietAI/envit5-translation).
-
-Since SmolLM2-360M has tied embeddings due to its size, we simply propagate the input embeddings initialization to the output embeddings. This differs from the output embeddings initialization in EEVE.
-
-<details>
-<summary>Read more...</summary>
-For the output embeddings of the new tokens, Kim et al. suggest to initialize them with the embeddings of the first subword token. This harmonization approach works if the base model has not its embeddings tied and has already some Vietnamese completion capabilities. Furthermore, it would be harmful for an English/Vietnamese model since most of the Vietnamese tokens start with a Latin consonant, which is already in the English alphabet. Single-consonant token embeddings already have a value in SmolLM2 and most of their information is useful for English completion, not Vietnamese completion.
-</details>
-
-### Multi-stage training
+### First stage
 
 #### Requirements
 
@@ -72,13 +43,80 @@ train:
   max_seq_length: 2048
 ```
 
-The training pipeline can then be started with the following commands:
+The first stage of continued pretraining can then be started with the following commands:
 
 ```bash
 cd vinasmol/training
-# Start initial continued pretraining with sequences of length 2048
+# Start initial continued pretraining
+# Consider running in the background, e.g. with nohup
 bash cpt_stage_1_main.sh
 ```
+
+#### Checkpoint conversion
+
+Afterwards, convert the pretraining checkpoint for finetuning:
+
+```bash
+# Replace checkpoint name with the last checkpoint of your pretraining run
+litgpt convert_pretrained_checkpoint ./step-000xxxxx ./data/checkpoints/VinaSmol/VinaSmol_stage_1
+```
+
+Optionally, convert the model to HuggingFace:
+
+```bash
+litgpt convert_from_litgpt ./data/checkpoints/Vinasmol ./data/hf_checkpoints/VinaSmol/Vinasmol_stage_1
+cd ./data/hf_checkpoints/VinaSmol/VinaSmol_stage_1
+# Make the model loadable from Transformers
+mv model.pth pytorch_model.bin
+# Afterwards, the model can be further compressed to safetensors with AutoModelForCausalLM.save_pretrained()
+```
+
+### Annealing stage
+
+#### Requirements
+
+- The [annealing data mixture](./dataset/README.md#annealing-datasets), prepared
+- A model checkpoint from the initial pretraining phase
+
+The annealing stage can be started with the following command:
+
+```bash
+cd vinasmol/training
+bash cpt_stage_3_annealing.sh
+```
+
+## Training data
+
+Details [here](./dataset/README.md).
+
+## Framework
+
+We use [litgpt](https://github.com/Lightning-AI/litgpt) for continued pretraining, which supports SmolLM2-360M.
+
+In order to follow the multi-stage training of EEVE, we customize the [continued pretraining recipe of litgpt](https://github.com/Lightning-AI/litgpt/blob/main/tutorials/pretrain.md#continued-pretraining-on-custom-data) by freezing the adequate parameters before the training starts.
+
+## Recipe
+
+### Vocabulary extension
+
+We use the [Efficient and Effective Vocabulary Extension](https://arxiv.org/abs/2402.14714v1) method (EEVE), which encompasses both tokenization and training.
+
+#### Tokenizer training
+
+We train a new tokenizer on Vietnamese corpora and extend the base tokenizer with the new tokens. Details for running tokenizer training, merging, vocabulary extension and embedding initialization can be found [here](../tokenization/README.md).
+
+#### Embedding initialization
+
+For the input embeddings of the new Vietnamese tokens, we use the average embeddings of their subword tokens (default in the `tokenizers` library, as in [Hewitt](https://nlp.stanford.edu/~johnhew/vocab-expansion.html)). Whenever possible, we use a convex combination of the initialized embedding and the embedding of their translation using [EnViT5-base](https://huggingface.co/VietAI/envit5-translation).
+
+Since SmolLM2-360M has tied embeddings due to its size, we simply propagate the input embeddings initialization to the output embeddings. This differs from the output embeddings initialization in EEVE.
+
+<details>
+<summary>Read more...</summary>
+For the output embeddings of the new tokens, Kim et al. suggest to initialize them with the embeddings of the first subword token. This harmonization approach works if the base model has not its embeddings tied and has already some Vietnamese completion capabilities. Furthermore, it would be harmful for an English/Vietnamese model since most of the Vietnamese tokens start with a Latin consonant, which is already in the English alphabet. Single-consonant token embeddings already have a value in SmolLM2 and most of their information is useful for English completion, not Vietnamese completion.
+</details>
+
+### Multi-stage training
 
 The different training stages used in EEVE are depicted below.
 
@@ -104,9 +142,21 @@ How to integrate both EEVE and ReLoRA into existing training frameworks remains 
 
 ### Hyperparameters
 
+| | SmolLM2-360M | VinaSmol-360M |
+| ---------------- | ----------- | ----------- |
+| **Total tokens** | 3T | 2B (continued) |
+| **Sequence length** | 2048* | 2048 |
+| **Global Batch size** | 1024 (2M tokens) | 32-256 |
+| **Learning rate** | 3e-3 | 1e-4 / 2e-4 |
+| **Warmup steps** | 5000 | 50 |
+
+\* 8192 after context length extension.
+
 Refer to https://huggingface.co/blog/smollm and the [SmolLM2 paper](https://arxiv.org/abs/2502.02737v1) for hyperparameter tuning.
 
 Similar to [Sailor 7B](https://arxiv.org/abs/2404.03608), we adjust the language mixture proportions and the learning rate based on initial experiments.
+
+Further improvements can be done to adjust batch size and learning rate.
 
 ### Context extension
 
@@ -117,18 +167,6 @@ We follow the procedure outlined by [Gao et al.](https://arxiv.org/abs/2410.0266
 ### Later stages and annealing
 
 Following the approach used by [SmolLM2](https://arxiv.org/abs/2502.02737v1), we add high-quality content, technical content, textbooks, medium-sized and [instruction](https://magazine.sebastianraschka.com/p/instruction-pretraining-llms#%C2%A7pretraining-with-instruction-data) datasets during the annealing phase in order to maximize their impact.
-
-### Requirements
-
-- The [annealing data mixture](./dataset/README.md#annealing-datasets), prepared
-- A model checkpoint from the initial pretraining phase
-
-The annealing stage can be started with the following command:
-
-```bash
-cd vinasmol/training
-bash cpt_stage_3_annealing.sh
-```
 
 ## Further improvements
 

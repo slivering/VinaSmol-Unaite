@@ -21,6 +21,8 @@ python -m vinasmol.tokenization.vocab_extension \
 The merged tokenizer and the SmolLM weights with extended vocabulary can be found in the
 directory specified by `--tokenizer-out-dir`.
 
+We effectively increase SmolLM2's vocabulary from 49152 to 55936 tokens.
+
 > [!NOTE] Terminology
 > 
 > We refer as *new* the tokenizer trained anew on Vietnamese corpora, with of vocabulary size specified by `--vietnamese-max-vocab-size`.
@@ -57,6 +59,12 @@ The EEVE methodology requires several modifications for VinaSmol.
 
 1. There is some overlap between Vietnamese tokens and English tokens (e.g "can", "a"...), which can be determined with a Vietnamese dictionary, for instance. Therefore, all of the Vietnamese token embeddings should be trained. This could include unaccentuated tokens.
 2. The embedding initialization will differ from EEVE-Korean. [More details](../training/README.md#embedding-initialization).
+
+## Caveats
+
+SmolLM2's tokenizer is a byte-level BPE but we train a SentencePiece tokenizer on Vietnamese data. Adding the merge pairs into the base tokenizer is not trivial and we have not succeeded in doing so.
+
+Therefore, we add the new tokens as *added tokens*, not as part of the regular vocabulary. Even if we did our best to avoid impacting the original vocabulary, this method can result in slightly worse tokenization of English sequences since some Vietnamese tokens are subwords of English tokens.
 
 ## Citations
 
