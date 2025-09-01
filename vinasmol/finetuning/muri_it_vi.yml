@@ -2,7 +2,7 @@
 checkpoint_dir: ../../training/checkpoints/VinaSmol/VinaSmol_stage_1
 
 # Directory in which to save checkpoints and logs. (type: <class 'Path'>, default: out/lora)
-out_dir: checkpoints/VinaSmol/VinaSmol_vi_alpaca
+out_dir: checkpoints/VinaSmol/VinaSmol_muri_it_vi
 
 # The precision to use for finetuning. Possible choices: "bf16-true", "bf16-mixed", "32-true". (type: Optional[str], default: null)
 precision: bf16-true
@@ -45,9 +45,9 @@ lora_head: false
 
 # Data-related arguments. If not provided, the default is ``litgpt.data.Alpaca``.
 data:
-  class_path: vinasmol_datamodule.AlpacaVi
+  class_path: vinasmol_datamodule.MuriITVi
   init_args:
-    download_dir: ./data/vi_alpaca_clean
+    download_dir: ./data/vi_multi_turn_alpaca
     mask_prompt: false
     prompt_style:
       class_path: vinasmol_datamodule.ChatMLAlpaca

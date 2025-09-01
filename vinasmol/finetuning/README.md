@@ -21,6 +21,8 @@ litgpt finetune_lora --config ./vi_alpaca.yml
 litgpt finetune_lora --config ./vi_multi_turn_alpaca.yml
 ```
 
+All of these finetuning steps are independent and can be done in parallel or on different machines.
+
 ### Merge
 
 TODO: mergekit and link to [merging/](../merging/README.md)

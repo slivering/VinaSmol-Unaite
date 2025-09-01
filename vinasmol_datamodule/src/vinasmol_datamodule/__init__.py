@@ -5,7 +5,7 @@ from typing import Optional
 from torch.utils.data import DataLoader
 
 from litgpt import prompts
-from litgpt.data import DataModule, SFTDataset, Alpaca, Deita, deita
+from litgpt.data import DataModule, SFTDataset, Alpaca, alpaca, Deita, deita
 from litgpt.prompts import PromptStyle
 from litgpt.tokenizer import Tokenizer
 
@@ -186,19 +186,21 @@ class ChatMLAlpaca(PromptStyle):
         sys_prompt = sys_prompt or self.system_message
         if input := kwargs.get("input"):
             sys_prompt = sys_prompt or (
-                "Below is an instruction that describes a task, paired with an input that provides further context. "
-                "Write a response that appropriately completes the request.\n\n"
+                "You are a helpful assistant. Follow the user's instruction "
+                "and use the supplied input as context to produce a complete, relevant response. "
+                "Stay concise, factual, and on-topic, and do not add unrelated content.\n\n"
             )
+            prompt = f"### Instruction:\n{prompt}### Context:\n{input}"
             return format_chatml([
                 ("system", sys_prompt),
                 ("user", prompt),
-                ("input", input),
                 ("assistant", None),
             ])
 
         sys_prompt = sys_prompt or (
-            "Below is an instruction that describes a task. "
-            "Write a response that appropriately completes the request.\n\n"
+            "You are a helpful assistant. "
+            "Follow the user's request and provide a complete, relevant answer. "
+            "Stay concise, factual, and on-topic, and do not add unrelated content.\n\n"
         )
         return format_chatml([
             ("system", sys_prompt),
@@ -257,6 +259,56 @@ class MultiTurnAlpacaVi(Deita):
             train_val_split['test'],
             self.include_multiturn_conversations,
         )
+
+        self.train_dataset = SFTDataset(
+            data=train_data,
+            tokenizer=self.tokenizer,
+            prompt_style=self.prompt_style,
+            max_seq_length=self.max_seq_length,
+            mask_prompt=self.mask_prompt,
+            ignore_index=self.ignore_index,
+        )
+        self.test_dataset = SFTDataset(
+            data=test_data,
+            tokenizer=self.tokenizer,
+            prompt_style=self.prompt_style,
+            max_seq_length=self.max_seq_length,
+            mask_prompt=self.mask_prompt,
+            ignore_index=self.ignore_index,
+        )
+
+@dataclass
+class MuriITVi(Deita):
+    """MURI-IT Vietnamese split data module for supervised finetuning."""
+    prompt_style: str | PromptStyle = ChatMLNoSys()
+
+    download_dir: Path = Path("./data/muri_it_vi")
+
+    repo_id: str = "akoksal/muri-it-language-split"
+
+    # TODO: possibly use a bare-bones ChatML prompt format
+
+    def __post_init__(self):
+        super().__post_init__()
+        if self.include_multiturn_conversations:
+            raise ValueError("There are no multi-turn conversations in MURI-IT")
+
+    def prepare_data(self) -> None:
+        from datasets import load_dataset
+
+        load_dataset(
+            self.repo_id,
+            'vie',
+            split=['train', 'validation'],
+            cache_dir=self.download_dir,
+        )
+    
+    def setup(self, stage: str = "") -> None:
+        from datasets import load_dataset
+
+        dataset = load_dataset(self.repo_id, 'vie', split=['train', 'validation'])
+        train_data = dataset[0].rename_column('input', 'instruction')
+        test_data = dataset[1].rename_column('input', 'instruction')
 
         self.train_dataset = SFTDataset(
             data=train_data,
