@@ -110,6 +110,8 @@ We train a new tokenizer on Vietnamese corpora and extend the base tokenizer wit
 
 For the input embeddings of the new Vietnamese tokens, we use the average embeddings of their subword tokens (default in the `tokenizers` library, as in [Hewitt](https://nlp.stanford.edu/~johnhew/vocab-expansion.html)). Whenever possible, we use a convex combination of the initialized embedding and the embedding of their translation using [EnViT5-base](https://huggingface.co/VietAI/envit5-translation).
 
+Alternative: [transplant the embeddings of another model via Orthogonal Matching Pursuit](https://github.com/arcee-ai/mergekit/blob/main/docs/tokensurgeon.md)
+
 Since SmolLM2-360M has tied embeddings due to its size, we simply propagate the input embeddings initialization to the output embeddings. This differs from the output embeddings initialization in EEVE.
 
 <details>

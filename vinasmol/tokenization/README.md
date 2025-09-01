@@ -71,3 +71,4 @@ Therefore, we add the new tokens as *added tokens*, not as part of the regular v
 - [Efficient and Effective Vocabulary Expansion Towards Multilingual Large Language Models](https://arxiv.org/abs/2402.14714v1)
 - [MTet: Multi-domain Translation for English and Vietnamese](https://doi.org/10.48550/arxiv.2210.05610)
 - [vietnamese-wordlist](https://github.com/duyet/vietnamese-wordlist)
+- [Training-Free Tokenizer Transplantation via Orthogonal Matching Pursuit](https://arxiv.org/abs/2506.06607)

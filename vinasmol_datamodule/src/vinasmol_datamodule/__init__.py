@@ -221,6 +221,7 @@ class ChatMLNoSys(prompts.ChatML):
 @dataclass
 class AlpacaVi(Alpaca):
     """Vietnamese Alpaca data module for supervised finetuning."""
+    # Alternative: https://huggingface.co/datasets/bkai-foundation-models/vi-alpaca (Parquet)
     file_url: str = "https://huggingface.co/datasets/tsdocode/vi_alpaca_clean/resolve/main/vi_alpaca_data.json"
 
     file_name: str = "vi_alpaca_data.json"
@@ -277,6 +278,7 @@ class MultiTurnAlpacaVi(Deita):
             ignore_index=self.ignore_index,
         )
 
+# TODO: data cleaning
 @dataclass
 class MuriITVi(Deita):
     """MURI-IT Vietnamese split data module for supervised finetuning."""
@@ -285,8 +287,6 @@ class MuriITVi(Deita):
     download_dir: Path = Path("./data/muri_it_vi")
 
     repo_id: str = "akoksal/muri-it-language-split"
-
-    # TODO: possibly use a bare-bones ChatML prompt format
 
     def __post_init__(self):
         super().__post_init__()

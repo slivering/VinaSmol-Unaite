@@ -51,7 +51,6 @@ data:
     mask_prompt: false
     prompt_style:
       class_path: vinasmol_datamodule.ChatMLNoSys
-      init_args:
     include_multiturn_conversations: true
     ignore_index: -100
     seed: 20250901
