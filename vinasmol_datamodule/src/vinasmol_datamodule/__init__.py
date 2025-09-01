@@ -1,17 +1,19 @@
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional, Union
+from typing import Optional
 
 from torch.utils.data import DataLoader
 
+from litgpt import prompts
 from litgpt.data import DataModule, SFTDataset, Alpaca, Deita, deita
+from litgpt.prompts import PromptStyle
 from litgpt.tokenizer import Tokenizer
 
 @dataclass
 class VinaSmolData(DataModule):
     """A mix of Vietnamese, English and code datasets with training and validation dataloaders."""
 
-    data_path: Union[str, Path] = Path("data/")
+    data_path: str | Path = Path("data/")
     annealing: bool = False
     seed: int = 20250828
     num_workers: int = 4
@@ -164,8 +166,59 @@ class VinaSmolData(DataModule):
         )
         return val_dataloader
 
+
+def format_chatml(messages: list[tuple[str, Optional[str]]]) -> str:
+    history = ""
+    for role, message in messages:
+        if message:
+            history += f"<|im_start|>{role}\n{message}<|im_end|>\n"
+        else:
+            history += f"<|im_start|>{role}\n"
+    return history
+
+class ChatMLAlpaca(PromptStyle):
+    def __init__(self, system_message: Optional[str] = None):
+        self.system_message = system_message
+        self.instruction_role = "user"
+        self.input_role = "input"
+
+    def apply(self, prompt: str, *, sys_prompt: Optional[str] = None, **kwargs: str) -> str:
+        sys_prompt = sys_prompt or self.system_message
+        if input := kwargs.get("input"):
+            sys_prompt = sys_prompt or (
+                "Below is an instruction that describes a task, paired with an input that provides further context. "
+                "Write a response that appropriately completes the request.\n\n"
+            )
+            return format_chatml([
+                ("system", sys_prompt),
+                ("user", prompt),
+                ("input", input),
+                ("assistant", None),
+            ])
+
+        sys_prompt = sys_prompt or (
+            "Below is an instruction that describes a task. "
+            "Write a response that appropriately completes the request.\n\n"
+        )
+        return format_chatml([
+            ("system", sys_prompt),
+            ("user", prompt),
+            ("assistant", None),
+        ])
+
+class ChatMLNoSys(prompts.ChatML):
+    def __init__(self):
+        super(PromptStyle).__init__()
+
+    def apply(self, prompt: str, *, sys_prompt: Optional[str] = None, **kwargs: str) -> str:
+        return format_chatml([
+            ("user", prompt),
+            ("assistant", None),
+        ])
+
 @dataclass
 class AlpacaVi(Alpaca):
+    """Vietnamese Alpaca data module for supervised finetuning."""
     file_url: str = "https://huggingface.co/datasets/tsdocode/vi_alpaca_clean/resolve/main/vi_alpaca_data.json"
 
     file_name: str = "vi_alpaca_data.json"
@@ -181,6 +234,8 @@ class MultiTurnAlpacaVi(Deita):
     repo_id: str = "lamhieu/alpaca_multiturns_dialogue_vi"
 
     val_split_fraction: float = 0.078758 # Get exactly 1000 examples
+
+    prompt_style: str | PromptStyle = ChatMLNoSys()
 
     def prepare_data(self) -> None:
         from datasets import load_dataset

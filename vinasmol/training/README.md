@@ -16,10 +16,10 @@
 First, convert the SmolLM2-360M weights & tokenizer to a litgpt checkpoint:
 
 ```yml
-litgpt convert_to_litgpt --model_name SmolLM2-360M vinasmol/tokenization/data/smollm_extended
+litgpt convert_to_litgpt --model_name SmolLM2-360M vinasmol/tokenization/checkpoints/smollm_extended
 ```
 
-Edit the files `vinasmol/tokenization/data/smollm_extended/model_config.yaml` and `cpt_stage_1_main.yml` to update the following fields:
+Edit the files `vinasmol/tokenization/checkpoints/smollm_extended/model_config.yaml` and `cpt_stage_1_main.yml` to update the following fields:
 
 ```yml
 model_config:
@@ -57,14 +57,15 @@ bash cpt_stage_1_main.sh
 Afterwards, convert the pretraining checkpoint for finetuning:
 
 ```bash
-# Replace checkpoint name with the last checkpoint of your pretraining run
-litgpt convert_pretrained_checkpoint ./step-000xxxxx ./data/checkpoints/VinaSmol/VinaSmol_stage_1
+cd checkpoints/VinaSmol
+# You can replace `final` by the last step of your run, e.g. step-000xxxxx
+litgpt convert_pretrained_checkpoint cpt/VinaSmol_stage_1/final VinaSmol_stage_1
 ```
 
 Optionally, convert the model to HuggingFace:
 
 ```bash
-litgpt convert_from_litgpt ./data/checkpoints/Vinasmol ./data/hf_checkpoints/VinaSmol/Vinasmol_stage_1
+litgpt convert_from_litgpt cpt/VinaSmol_stage_1/final hf_checkpoints/VinaSmol/Vinasmol_stage_1
 cd ./data/hf_checkpoints/VinaSmol/VinaSmol_stage_1
 # Make the model loadable from Transformers
 mv model.pth pytorch_model.bin

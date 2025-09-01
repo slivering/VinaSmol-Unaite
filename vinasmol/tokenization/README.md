@@ -11,11 +11,11 @@ The Vietnamese datasets need to have been preprocessed, filtered and deduplicate
 ```bash
 python -m vinasmol.tokenization.training \
     vinasmol/training/dataset/data/deduped/vi-all \
-    --tokenizer-out-dir vinasmol/tokenization/data \
+    --tokenizer-out-dir vinasmol/tokenization/checkpoints \
     --vietnamese-max-vocab-size 20000
 python -m vinasmol.tokenization.vocab_extension \
-    vinasmol/tokenization/data/merged \
-    vinasmol/tokenization/data/smollm_extended
+    vinasmol/tokenization/checkpoints/merged \
+    vinasmol/tokenization/checkpoints/smollm_extended
 ```
 
 The merged tokenizer and the SmolLM weights with extended vocabulary can be found in the

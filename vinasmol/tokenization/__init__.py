@@ -2,7 +2,7 @@ from pathlib import Path
 
 from transformers import PreTrainedTokenizerBase
 
-DATA_DIR = (Path(__file__).parent / "data").resolve()
+DATA_DIR = (Path(__file__).parent / "checkpoints").resolve()
 
 def number_of_added_tokens(
         base_tokenizer: PreTrainedTokenizerBase,

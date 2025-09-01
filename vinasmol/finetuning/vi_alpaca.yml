@@ -2,7 +2,7 @@
 checkpoint_dir: ../../training/data/checkpoints/VinaSmol/VinaSmol_stage_1
 
 # Directory in which to save checkpoints and logs. (type: <class 'Path'>, default: out/lora)
-out_dir: data/checkpoints/VinaSmol_vi_alpaca
+out_dir: checkpoints/VinaSmol/VinaSmol_vi_alpaca
 
 # The precision to use for finetuning. Possible choices: "bf16-true", "bf16-mixed", "32-true". (type: Optional[str], default: null)
 precision: bf16-true
@@ -49,7 +49,7 @@ data:
   init_args:
     download_dir: ./data/vi_alpaca_clean
     mask_prompt: false
-    prompt_style: alpaca
+    prompt_style: alpaca # vinasmol_datamodule.ChatMLNoSys
     ignore_index: -100
     seed: 20250901
     num_workers: 4
