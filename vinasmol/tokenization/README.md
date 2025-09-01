@@ -14,8 +14,8 @@ python -m vinasmol.tokenization.training \
     --tokenizer-out-dir vinasmol/tokenization/checkpoints \
     --vietnamese-max-vocab-size 20000
 python -m vinasmol.tokenization.vocab_extension \
-    vinasmol/tokenization/checkpoints/merged \
-    vinasmol/tokenization/checkpoints/smollm_extended
+    vinasmol/tokenization/checkpoints/merged_tokenizer \
+    vinasmol/tokenization/checkpoints/SmolLM2-360M_extended
 ```
 
 The merged tokenizer and the SmolLM weights with extended vocabulary can be found in the

@@ -286,7 +286,7 @@ def main(
         limit_alphabet=limit_vietnamese_alphabet,
     )
     logger.info("New tokenizer vocabulary size: {}", new_tokenizer.get_vocab_size())
-    new_tokenizer_path = tokenizer_out_dir / "new_vietnamese_tokenizer.json"
+    new_tokenizer_path = tokenizer_out_dir / "new_vietnamese_tokenizer" / "tokenizer.json"
     tokenizer_out_dir.mkdir(parents=True, exist_ok=True)
     new_tokenizer.save(f"{new_tokenizer_path}")
 
@@ -329,7 +329,7 @@ def main(
 
     # TODO: make the added tokens like part of the vocabulary
     # Performance impact on tokenizer loaded with GPT2TokenizerFast.from_pretrained??
-    base_tokenizer.save_pretrained(f"{tokenizer_out_dir / 'merged'}")
+    base_tokenizer.save_pretrained(f"{tokenizer_out_dir / 'merged_tokenizer'}")
 
     logger.info("Saved tokenizer states in {}", tokenizer_out_dir)
 

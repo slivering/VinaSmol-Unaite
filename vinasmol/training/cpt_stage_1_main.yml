@@ -32,7 +32,7 @@ precision: bf16-mixed
 
 # Optional path to a checkpoint directory to initialize the model from.
 # Useful for continued pretraining. Mutually exclusive with ``resume``. (type: Optional[Path], default: null)
-initial_checkpoint_dir: ../tokenization/checkpoints/smollm_extended
+initial_checkpoint_dir: ../tokenization/checkpoints/SmolLM2-360M_extended
 
 # Path to a checkpoint directory to resume from in case training was interrupted, or ``True`` to resume
 # from the latest checkpoint in ``out_dir``. An error will be raised if no checkpoint is found. Passing
@@ -127,7 +127,7 @@ num_nodes: 1
 
 # Optional path to the tokenizer dir that was used for preprocessing the dataset. Only some data
 # module require this. (type: Optional[Path], default: null)
-tokenizer_dir: ../tokenization/checkpoints/merged
+tokenizer_dir: ../tokenization/checkpoints/merged_tokenizer
 
 # The name of the logger to send metrics to. (type: Literal['wandb', 'tensorboard', 'csv'], default: tensorboard)
 logger_name: tensorboard

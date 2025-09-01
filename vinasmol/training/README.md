@@ -16,10 +16,10 @@
 First, convert the SmolLM2-360M weights & tokenizer to a litgpt checkpoint:
 
 ```yml
-litgpt convert_to_litgpt --model_name SmolLM2-360M vinasmol/tokenization/checkpoints/smollm_extended
+litgpt convert_to_litgpt --model_name SmolLM2-360M vinasmol/tokenization/checkpoints/SmolLM2-360M_extended
 ```
 
-Edit the files `vinasmol/tokenization/checkpoints/smollm_extended/model_config.yaml` and `cpt_stage_1_main.yml` to update the following fields:
+Edit the files `vinasmol/tokenization/checkpoints/SmolLM2-360M_extended/model_config.yaml` and `cpt_stage_1_main.yml` to update the following fields:
 
 ```yml
 model_config:

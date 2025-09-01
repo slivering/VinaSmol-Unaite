@@ -128,7 +128,7 @@ num_nodes: 1
 
 # Optional path to the tokenizer dir that was used for preprocessing the dataset. Only some data
 # module require this. (type: Optional[Path], default: null)
-tokenizer_dir: ../tokenization/checkpoints/merged
+tokenizer_dir: ../tokenization/checkpoints/merged_tokenizer
 
 # The name of the logger to send metrics to. (type: Literal['wandb', 'tensorboard', 'csv'], default: tensorboard)
 logger_name: tensorboard

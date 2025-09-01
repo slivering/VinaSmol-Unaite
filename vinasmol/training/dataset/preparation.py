@@ -122,7 +122,7 @@ def main(
     if not data_dirs:
         data_dirs = DATA_DIRS
 
-    tokenizer = GPT2TokenizerFast.from_pretrained(TOKENIZER_DATA_DIR / 'merged')
+    tokenizer = GPT2TokenizerFast.from_pretrained(TOKENIZER_DATA_DIR / 'merged_tokenizer')
 
     # train, val, test
     splits_dirs = [
