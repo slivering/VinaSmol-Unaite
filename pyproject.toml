@@ -6,8 +6,6 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "accelerate",
-    "aiohttp",
-    "certifi",
     # FIXME: datasets>=4.0 is necessary for IterableDataset.to_parquet
     # and for compatibility with new column formats, but is incompatible with litgpt>=0.5
     "datasets",
@@ -25,11 +23,9 @@ dependencies = [
     "python-dotenv",
     "pyvi",
     "rensa",
-    "requests",
     "seaborn",
     "sentencepiece",
     "spacy",
-    "sickle",
     "tiktoken",
     "torch",
     "transformers",
@@ -49,9 +45,11 @@ dev = [
 ]
 
 [tool.uv.sources]
+ccvj = { workspace = true }
 vinasmol_datamodule = { workspace = true }
 
 [tool.uv.workspace]
 members = [
-  "vinasmol_datamodule"
+  "ccvj",
+  "vinasmol_datamodule",
 ]

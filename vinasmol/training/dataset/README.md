@@ -109,7 +109,7 @@ For the annealing phase, we keep 60 % of the mixture with the proportions in the
 
 - Wikipedia (English, Vietnamese)
 - Binhvq News Corpus
-- [CCVJ](./ccvj/README.md), an in-house dataset of Vietnamese academic papers
+- [CCVJ](../../../ccvj/src/ccvj/README.md), an in-house dataset of Vietnamese academic papers
 - Gutenberg-en
 - [FineMath 4+](https://huggingface.co/datasets/HuggingFaceTB/finemath)
 - [StackMathQA](https://huggingface.co/datasets/math-ai/StackMathQA)
