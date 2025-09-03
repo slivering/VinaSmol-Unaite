@@ -19,6 +19,7 @@ Finetune the base model on multiple chat and instruction datasets:
 cd vinasmol/finetuning
 litgpt finetune_lora --config ./vi_alpaca.yml
 litgpt finetune_lora --config ./vi_multi_turn_alpaca.yml
+litgpt finetune_lora --config ./lima.yml
 ```
 
 All of these finetuning steps are independent and can be done in parallel or on different machines.
