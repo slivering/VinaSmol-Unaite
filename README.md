@@ -2,7 +2,7 @@
 
 VinaSmol is a proof-of-concept project that aims to add Vietnamese language capabilities and knowledge to [SmolLM 360M](https://huggingface.co/HuggingFaceTB/SmolLM2-360M-Instruct).
 
-Our approach aims to demonstrate that efficient pretraining methods on a medium-sized Vietnamese dataset (less than 10B tokens) can effectively integrate a new language into an LLM that was not trained on it.
+Our approach aims to demonstrate that efficient pretraining methods on an open, medium-sized Vietnamese dataset (less than 10B tokens) can effectively integrate a new language into an LLM that was not trained on it.
 
 Future plans include extending these techniques to [Lucie 7B](https://huggingface.co/OpenLLM-France/Lucie-7B-Instruct-v1.1).
 
@@ -12,12 +12,20 @@ This model is still in heavy development and is not ready for general use.
 
 ## Development
 
+> [!NOTE] Target audience
+>
+> This section is aimed at developers who want to replicate VinaSmol or contribute to the project.
+
 Install [uv](https://docs.astral.sh/uv/) and set up the virtual environment:
 
 ```bash
 uv lock
-uv sync
+uv sync --all-packages
 ```
+
+We use the [LitGPT](https://github.com/Lightning-AI/litgpt) framework for training and finetuning. Make sure to check their documentation and some specific [tips](./docs/litgpt_help.md) for VinaSmol compatibility.
+
+VinaSmol can be fully replicated by following the steps in the order below.
 
 ## Training methods
 
@@ -44,3 +52,11 @@ We are looking forward further enhancements for VinaSmol:
 - Better dataset curation
 - Improved reasoning abilities
 - Safety-aware pretraining
+
+## Contribution
+
+VinaSmol is still in development. We welcome any kind of contribution, including suggestions concerning our training methodology. Feel free to open an issue to get started.
+
+## Citation
+
+TODO

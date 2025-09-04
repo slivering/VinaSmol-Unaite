@@ -13,9 +13,9 @@
 - The prepared Vietnamese, English and code datasets ([instructions here](./dataset/README.md#prepare-data-for-training))
 
 
-First, convert the SmolLM2-360M weights & tokenizer to a litgpt checkpoint:
+First, convert the SmolLM2-360M weights & tokenizer to a litgpt checkpoint. Read [this paragraph](../../docs/litgpt_help.md#convert-a-huggingface-transformers-checkpoint-to-a-litgpt-checkpoint) for more info.
 
-```yml
+```bash
 litgpt convert_to_litgpt --model_name SmolLM2-360M vinasmol/tokenization/checkpoints/SmolLM2-360M_extended
 ```
 
@@ -62,15 +62,7 @@ cd checkpoints/VinaSmol
 litgpt convert_pretrained_checkpoint cpt/VinaSmol_stage_1/final VinaSmol_stage_1
 ```
 
-Optionally, convert the model to HuggingFace:
-
-```bash
-litgpt convert_from_litgpt cpt/VinaSmol_stage_1/final hf_checkpoints/VinaSmol/Vinasmol_stage_1
-cd ./data/hf_checkpoints/VinaSmol/VinaSmol_stage_1
-# Make the model loadable from Transformers
-mv model.pth pytorch_model.bin
-# Afterwards, the model can be further compressed to safetensors with AutoModelForCausalLM.save_pretrained()
-```
+You can also [convert the model to HuggingFace](../../docs/litgpt_help.md#convert-a-litgpt-checkpoint-to-a-huggingface-transformers-checkpoint).
 
 ### Annealing stage
 

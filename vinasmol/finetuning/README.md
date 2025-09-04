@@ -9,7 +9,9 @@ We finetune VinaSmol on Vietnamese conversation and instruction data in order to
 
 ### Requirements
 
-- [A converted pre-training checkpoint](../training/README.md#checkpoint-conversion)
+You need [a converted LitGPT pre-training checkpoint](../training/README.md#checkpoint-conversion).
+
+If you have a HuggingFace checkpoint, make sure to follow the instructions [here](../../docs/litgpt_help.md#convert-a-huggingface-transformers-checkpoint-to-a-litgpt-checkpoint).
 
 ### Finetuning runs
 
@@ -23,6 +25,13 @@ litgpt finetune_lora --config ./lima.yml
 ```
 
 All of these finetuning steps are independent and can be done in parallel or on different machines.
+
+### Conversion to HuggingFace Transformers
+
+```bash
+cd scripts
+bash ./lit_to_hf
+```
 
 ### Merge
 
