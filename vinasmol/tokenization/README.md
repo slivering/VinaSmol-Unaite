@@ -51,7 +51,7 @@ Vietnamese tokenization differs from Latin language tokenization since space is 
 We believe our approach is valid for the following reasons:
 
 1. SmolLM has no cross-lingual alignment between English and Vietnamese, so the negative impacts of vocabulary extension outlined by [Zhao et al.](https://arxiv.org/abs/2401.01055) and in [Sailor](https://arxiv.org/abs/2404.03608) are unlikely to apply.
-2. We employ the [EEVE](https://arxiv.org/abs/2402.14714v1) method for vocabulary extension, which is designed to avoid friction with the introduction fo a new language in the model training.
+2. We plan to employ the [EEVE](https://arxiv.org/abs/2402.14714v1) method for vocabulary extension, which is designed to avoid friction with the introduction fo a new language in the model training.
 
 ## Adjustments
 

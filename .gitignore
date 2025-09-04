@@ -1,4 +1,5 @@
 checkpoints/
+hf_checkpoints/
 data/
 logs/
 nohup.out

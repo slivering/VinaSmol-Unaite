@@ -90,6 +90,10 @@ In order to follow the multi-stage training of EEVE, we customize the [continued
 
 ## Recipe
 
+> [!WARNING]
+>
+> The current implementation is based on standard continued pretraining without any kind of parameter freezing. EEVE is planned to be implemented soon but requires modifications to the default LitGPT training script.
+
 ### Vocabulary extension
 
 We use the [Efficient and Effective Vocabulary Extension](https://arxiv.org/abs/2402.14714v1) method (EEVE), which encompasses both tokenization and training.
