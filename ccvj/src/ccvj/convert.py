@@ -27,22 +27,27 @@ class PaperProcessor:
         """Clean the markdown content to remove superfluous items."""
         raise NotImplementedError
 
-    async def convert_pdf(
+    async def wait_for_conversion(
             self,
             pdf_file: str | Path,
             output_md_file: str | Path,
+            error_file: str | Path,
         ) -> ConversionResult:
-        """Process a PDF paper using scienceparse.
+        """Wait for a PDF paper to be converted to Markdown.
 
         Args:
             pdf_file (str | Path): the path to the downloaded paper as a PDF file.
-            output_md_file (str | Path): the file path to write Markdown content.
+            output_md_file (str | Path): the converted Markdown file.
+            error_file (str | Path): the file name that's created if there is a conversion error.
         Returns:
             ConversionResult: whether the PDF file was successfully converted.
         """
-        # TODO: conversion should depend on whether the PDF is a whole issue or a single article
-        # issues: remove title page with TOC
-        raise NotImplementedError
+        async with asyncio.timeout(8 * 3600):
+            # TODO: conversion should depend on whether the PDF is a whole issue or a single article
+            # issues: remove title page with TOC
+
+            # TODO: watch file system but use same cache as other tasks
+            raise NotImplementedError
 
     async def convert_papers(self, download_dir: str | Path) -> list[ConversionResult]:
         """Process PDF papers in bulk using scienceparse.
@@ -55,12 +60,15 @@ class PaperProcessor:
         """
         download_dir = Path(download_dir)
 
-        # TODO: multiprocessing with pool
         tasks = []
         for pdf_file in download_dir.glob("*.pdf"):
-            md_file = download_dir / pdf_file.name.replace(".pdf", ".md")
-            task = self.convert_pdf(pdf_file, md_file)
+            name = pdf_file.name.removesuffix(".pdf")
+            md_file = download_dir / f"{name}.md"
+            error_file = download_dir / f".{name}.md.error"
+            task = self.wait_for_conversion(pdf_file, md_file, error_file)
             tasks.append(task)
+        
+        self.launch_conversion_jobs()
 
         results: list[ConversionResult] = await asyncio.gather(*tasks)
         self.results.extend(results)
