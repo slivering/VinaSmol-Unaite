@@ -36,25 +36,43 @@ bash ./scripts/convert_lit_ft_to_hf.sh
 
 Also see [Convert a LitGPT checkpoint to a HuggingFace Transformers checkpoint](../../docs/litgpt_help.md#convert-a-litgpt-checkpoint-to-a-huggingface-transformers-checkpoint).
 
-### Merge
+## Merge
 
-TODO: mergekit and link to [merging/](../merging/README.md)
+We use [model merging](https://planetbanatt.net/articles/modelmerging.html) in order to combine the finetuning subtasks into a single model. This techniques mitigates catastrophic forgetting and improves multi-task learning after finetuning (multilinguality, safety, alignment).
+
+Inspired by [SEA-LION](https://arxiv.org/pdf/2504.05747)'s methodology, we use a [multi-stage merging](https://github.com/arcee-ai/mergekit/blob/main/docs/multimerge.md) process.
+
+The finetuned models can be merged with the following commands:
+
+```bash
+cd vinasmol/finetuning
+mergekit-multi multimerge.yml \
+  --intermediate-dir ./hf_checkpoints/VinaSmol/merge_intermediates \
+```
+
+### Try it out
+
+```bash
+bash ../../scripts/convert_vinasmol_to_litgpt.sh --old_vocab_size 49152 --new_vocab_size 55936 ./hf_checkpoints/VinaSmol/merge_intermediates/final-merge
+litgpt chat ./hf_checkpoints/VinaSmol/merge_intermediates/final-merge
+```
+
+### Future improvements
+
+- Restrict merging to a slice of the layers of `SmolLM2-360M_extended`, and do not merge the embeddings of the new tokens (requires custom code...)
+- Do not include CPT with mixed language data and merge monolingual models, as in [Aakanksha et al.](https://arxiv.org/abs/2410.10801).
+
+---
 
 ## Recipe
 
 ### ORPO
 
-We use [ORPO](https://arxiv.org/abs/2403.07691) to perform supervised fine-tuning without a base model.
+We could use [ORPO](https://arxiv.org/abs/2403.07691) to perform supervised fine-tuning without a base model.
 
 ORPO is integrated in the [transformers](https://huggingface.co/docs/trl/main/en/orpo_trainer) library.
 
 Alternatively, [QDoRa](https://www.answer.ai/posts/2024-04-26-fsdp-qdora-llama3.html#dora) can be an efficient finetuning method.
-
-### Merging
-
-Details [here](../merging/README.md).
-
-Alternative: train from SmolLM2-360M base model and add Instruct residual like suggested by [Jindal et al.](https://arxiv.org/abs/2410.10739v1). May not be applicable given that adding a whole new language affects the model much more than domain-specific adaptation.
 
 ## Datasets
 
@@ -91,6 +109,9 @@ We are also considering the synthetic math datasets below.
 
 ### English datasets
 
-We use [Smol-SmalTalk](https://huggingface.co/datasets/HuggingFaceTB/smol-smoltalk) which was used to finetune SmolLM2-360M.
+We use [Smol-SmolTalk](https://huggingface.co/datasets/HuggingFaceTB/smol-smoltalk) which was used to finetune SmolLM2-360M.
 
 
+## References
+
+- [Arcee's MergeKit: A Toolkit for Merging Large Language Models](https://aclanthology.org/2024.emnlp-industry.36)

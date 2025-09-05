@@ -6,7 +6,7 @@ import shutil
 from typing import Annotated, Optional
 
 from loguru import logger
-from transformers import AutoModel
+from transformers import AutoModelForCausalLM
 import typer
 
 ROOT_DIR = Path(__file__).parent.parent.resolve()
@@ -31,7 +31,7 @@ def main(model_dir: Path, out_dir: Annotated[Optional[Path], typer.Argument()] =
         logger.info("Copying {}", config_json)
         shutil.copy2(config_json, config_json_out)
         
-    model = AutoModel.from_pretrained(model_dir, local_files_only=True)
+    model = AutoModelForCausalLM.from_pretrained(model_dir, local_files_only=True)
     model = model.bfloat16()
     model.save_pretrained(out_dir)
 

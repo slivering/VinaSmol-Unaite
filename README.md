@@ -33,9 +33,8 @@ We employ a comprehensive pipeline to integrate the Vietnamese language into Smo
 
 1. [Extend an existing model’s tokenizer with new Vietnamese tokens](./vinasmol/tokenization/README.md).
 2. [Continued pre-training of the model on Vietnamese](./vinasmol/training/README.md)
-3. [Fine-tuning for instructions, capabilities and safety](./vinasmol/finetuning/README.md)
-4. [Model merging to combine the finetuned checkpoints](./vinasmol/merging/README.md)
-5. [Evaluation of the final model in both Vietnamese and English](./vinasmol/evaluation/README.md)
+3. [Fine-tuning and merging for instructions, capabilities and safety](./vinasmol/finetuning/README.md)
+4. [Evaluation of the final model in both Vietnamese and English](./vinasmol/evaluation/README.md)
 
 We combine state-of-the-art techniques used for LLMs targeting South-East Asian languages, prioritizing efficiency and results within reasonable compute resources. The goal is to enable replication of the VinaSmol training process on a single node and in reasonable time.
 

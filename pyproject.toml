@@ -31,7 +31,7 @@ dependencies = [
     "transformers",
     "typer",
     "vinasmol_datamodule",
-    "mergekit",
+    "mergekit>=0.1",
 ]
 
 [dependency-groups]
@@ -48,6 +48,7 @@ dev = [
 [tool.uv.sources]
 ccvj = { workspace = true }
 vinasmol_datamodule = { workspace = true }
+mergekit = { git = "https://github.com/arcee-ai/mergekit.git" }
 
 [tool.uv.workspace]
 members = [

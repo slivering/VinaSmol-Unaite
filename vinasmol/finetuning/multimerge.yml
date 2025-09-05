@@ -1,0 +1,42 @@
+name: vi-merge
+merge_method: dare_ties
+models:
+  - model: ./hf_checkpoints/VinaSmol/VinaSmol_muri_it_vi
+    parameters:
+      density: 0.3
+      weight: 0.2
+  - model: ./hf_checkpoints/VinaSmol/VinaSmol_vi_alpaca
+    parameters:
+      density: 0.6
+      weight: 0.5
+  - model: ./hf_checkpoints/VinaSmol/VinaSmol_vi_multi_turn_alpaca
+    parameters:
+      density: 0.6
+      weight: 0.5
+base_model: ../training/hf_checkpoints/VinaSmol
+parameters:
+  normalize: true
+  lambda: 1.0
+---
+name: final-merge
+merge_method: della_linear
+base_model: ../training/hf_checkpoints/VinaSmol
+models:
+  - model: vi-merge
+    parameters:
+      density: 0.8
+      weight: 0.7
+      epsilon: 0.15
+  - model: ./hf_checkpoints/VinaSmol/VinaSmol_lima
+    parameters:
+      density: 0.5
+      weight: 0.05
+      epsilon: 0.4
+  - model: ../tokenization/checkpoints/SmolLM2-360M_extended
+    parameters:
+      density: 0.5
+      weight: 0.25
+      epsilon: 0.4
+parameters:
+  normalize: true
+  lambda: 1.0

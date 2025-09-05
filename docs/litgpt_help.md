@@ -8,7 +8,7 @@ Nevertheless, LitGPT uses its own model format and only "supports" [a specific s
 
 [Reference](https://github.com/Lightning-AI/litgpt/blob/main/tutorials/convert_hf_checkpoint.md)
 
-In order to run continued pretraining or finetuning, a HF checkpoint needs to be converted to the LitGPT format. For SmolLM2-360M-Instruct or VinaSmol checkpoint, use the following command:
+In order to run continued pretraining or finetuning, a HF checkpoint needs to be converted to the LitGPT format. For **SmolLM2-360M-Instruct**, use the following command:
 
 ```bash
 litgpt convert_to_litgpt --model_name SmolLM2-360M-Instruct checkpoint_dir
@@ -16,13 +16,19 @@ litgpt convert_to_litgpt --model_name SmolLM2-360M-Instruct checkpoint_dir
 
 This should create a `lit_model.pth` and a `model_config.yaml` file.
 
-If the model is actually VinaSmol with extended vocabulary size, you can edit the `model_config.yaml` file to adjust with the actual vocabulary size of the [merged tokenizer](../vinasmol/tokenization/README.md#extend-smollms-vocabulary-with-vietnamese)
+For **VinaSmol**, you will need to edit the `model_config.yaml` file so it matches the actual vocabulary size after [extension and embedding resizing](../vinasmol/tokenization/README.md#extend-smollms-vocabulary-with-vietnamese).
 
 ```yml
 # Replace 49152 with the actual vocabulary size of the merged tokenizer
 padded_vocab_size: 55936
 ...
 vocab_size: 55936
+```
+
+Otherwise, you can run the two steps above in a single command:
+
+```bash
+bash scripts/convert_vinasmol_to_litgpt.sh --old_vocab_size 49152 --new_vocab_size 55936 checkpoint_dir
 ```
 
 ## Convert a LitGPT checkpoint to a HuggingFace Transformers checkpoint
