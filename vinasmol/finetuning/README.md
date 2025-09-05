@@ -28,10 +28,13 @@ All of these finetuning steps are independent and can be done in parallel or on 
 
 ### Conversion to HuggingFace Transformers
 
+In the root directory of VinaSmol, run the following command:
+
 ```bash
-cd scripts
-bash ./lit_to_hf
+bash ./scripts/convert_lit_ft_to_hf.sh
 ```
+
+Also see [Convert a LitGPT checkpoint to a HuggingFace Transformers checkpoint](../../docs/litgpt_help.md#convert-a-litgpt-checkpoint-to-a-huggingface-transformers-checkpoint).
 
 ### Merge
 
