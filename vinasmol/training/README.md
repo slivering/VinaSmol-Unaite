@@ -47,9 +47,9 @@ The first stage of continued pretraining can then be started with the following 
 
 ```bash
 cd vinasmol/training
-# Start initial continued pretraining
+# Start initial continued pretraining with EEVE
 # Consider running in the background, e.g. with nohup
-bash cpt_stage_1_main.sh
+bash cpt_eeve_main.sh
 ```
 
 #### Checkpoint conversion

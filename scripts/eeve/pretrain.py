@@ -1,4 +1,5 @@
 # Copyright Lightning AI. Licensed under the Apache License 2.0, see LICENSE file.
+# Modifications © 2025 Linagora. All modifications are also licensed under the Apache License 2.0.
 
 import math
 import pprint
@@ -8,7 +9,9 @@ from datetime import timedelta
 from functools import partial
 from pathlib import Path
 from typing import Dict, Optional, Tuple, Union
+import warnings
 
+from jsonargparse import auto_cli, set_config_read_mode, set_docstring_parse_options
 import lightning as L
 import torch
 import torch.nn as nn
@@ -70,6 +73,7 @@ def setup(
     tokenizer_dir: Optional[Path] = None,
     logger_name: Literal["wandb", "tensorboard", "csv", "mlflow"] = "tensorboard",
     seed: int = 42,
+    eeve_stage: Optional[int] = None,
 ):
     """Pretrain a model.
 
@@ -97,6 +101,10 @@ def setup(
         logger_name: The name of the logger to send metrics to.
         seed: The random seed to use for reproducibility.
     """
+    if isinstance(eeve_stage, int) and eeve_stage not in list(range(len(EEVE_VINASMOL_STAGES))):
+        print(f"Invalid EEVE VinaSmol stage: {eeve_stage}")
+        quit()
+
     if model_name == "list":
         available_models = "\n".join(sorted(name_to_config))
         print(f"Available values:\n{available_models}")
@@ -138,6 +146,7 @@ def setup(
     )
 
     if devices * num_nodes > 1:
+        # TODO: enable activation checkpointing
         strategy = FSDPStrategy(auto_wrap_policy={Block}, state_dict_type="full", sharding_strategy="HYBRID_SHARD")
     else:
         strategy = "auto"
@@ -168,8 +177,93 @@ def setup(
         train=train,
         eval=eval,
         optimizer=optimizer,
+        eeve_stage=eeve_stage,
     )
 
+
+def freeze_partial_embedding_hook(grad, initial_vocab_size: int):
+    grad[:initial_vocab_size] = 0
+    return grad
+
+# Inspired from https://huggingface.co/yanolja/EEVE-Korean-10.8B-v1.0#technical-deep-dive
+# TODO: support models with non-tied embeddings
+def eeve_freeze(
+        model: nn.Module,
+        freeze_transformer_layers: bool = False,
+        freeze_embeddings: bool = False,
+        freeze_old_embeddings: bool = False,
+        initial_vocabulary_size: int = 49152, # SmolLM2's vocab size
+    ) -> int:
+    """Freeze part of a model's parameters as in EEVE (arXiv:2402.14714).
+
+    Args:
+        model (nn.Module): A PyTorch model of a LLM with tied embeddings.
+        freeze_transformer_layers (bool): Whether to freeze all of the transformer layers.
+            Defaults to False.
+        freeze_embeddings (bool): Whether to freeze all of the embedding layers.
+            Defaults to False.
+        freeze_old_embeddings (bool): Whether to freeze the embeddings of the initial
+            vocabulary. Defaults to False.
+        initial_vocabulary_size (int): The vocabulary size of the base model before
+            vocabulary extension. Defaults to SmolLM2's base vocabulary size.
+    
+    Returns:
+        trainable_params (int): The number of trainable parameters.
+    """
+    trainable_params = 0
+    for name, param in model.named_parameters():
+        # TODO: make sure that the hook is not applied twice
+        if "lm_head" in name or "embed_tokens" in name:
+            param.requires_grad = not freeze_embeddings
+            if not freeze_embeddings and freeze_old_embeddings:
+                if param.shape[0] < initial_vocabulary_size:
+                    raise ValueError(
+                        f"{initial_vocabulary_size=} is larger than "
+                        f"the number of embeddings ({param.shape[0]})"
+                    )
+                print(
+                    f"Freezing {initial_vocabulary_size}/{param.shape[0]} embeddings "
+                    f"of size {param.shape[1]}"
+                )
+                param.register_hook(partial(
+                    freeze_partial_embedding_hook,
+                    initial_vocab_size=initial_vocabulary_size,
+                ))
+                trainable_params -= initial_vocabulary_size * param.shape[1]
+        else:
+            param.requires_grad = not freeze_transformer_layers
+        
+        trainable_params += param.requires_grad * param.numel()
+    
+    return trainable_params
+
+
+EEVE_VINASMOL_STAGES = [
+    # Stage 1 + 2 + 3
+    dict(
+        freeze_transformer_layers=True,
+        freeze_embeddings=False,
+        freeze_old_embeddings=True,
+    ),
+    # Stage 4 + 5
+    dict(
+        freeze_transformer_layers=True,
+        freeze_embeddings=False,
+        freeze_old_embeddings=False,
+    ),
+    # Stage 6
+    dict(
+        freeze_transformer_layers=False,
+        freeze_embeddings=False,
+        freeze_old_embeddings=False,
+    ),
+    # Stage 7
+    dict(
+        freeze_transformer_layers=False,
+        freeze_embeddings=True,
+        freeze_old_embeddings=True,
+    ),
+]
 
 def main(
     fabric: L.Fabric,
@@ -186,6 +280,7 @@ def main(
     eval: EvalArgs,
     optimizer: Union[str, Dict],
     num_nodes: int = 1,
+    eeve_stage: Optional[int] = None,
 ) -> None:
     validate_args(train, eval, initial_checkpoint_dir, resume)
 
@@ -210,6 +305,14 @@ def main(
 
     model = torch.compile(model)
     model = fabric.setup(model)
+
+    if eeve_stage is None:
+        fabric.print(f"Pretraining without EEVE")
+    else:
+        freeze_kwargs = EEVE_VINASMOL_STAGES[eeve_stage]
+        fabric.print(f"Running EEVE stage {eeve_stage} with {freeze_kwargs}")
+        trainable_params = eeve_freeze(model, **freeze_kwargs)
+        fabric.print(f"Trainable parameters: {trainable_params:,}")
 
     extra_kwargs = {"fused": fabric.device.type == "cuda"}
     optimizer = instantiate_torch_optimizer(optimizer, model.parameters(), **extra_kwargs)
@@ -522,3 +625,20 @@ def validate_args(train: TrainArgs, eval: EvalArgs, initial_checkpoint_dir, resu
         issues.append("Can't provide both `--resume` and `--initial_checkpoint_dir`. Choose one.")
     if issues:
         raise ValueError("\n".join(issues))
+
+
+if __name__ == '__main__':
+    set_docstring_parse_options(attribute_docstrings=True)
+    set_config_read_mode(urls_enabled=True)
+
+    # PyTorch bug that raises a false-positive warning
+    # More info: https://github.com/Lightning-AI/litgpt/issues/1561
+    warning_message = r"The epoch parameter in `scheduler.step\(\)` was not necessary and is being deprecated.*"
+
+    warnings.filterwarnings(
+        action="ignore", message=warning_message, category=UserWarning, module=r".*torch\.optim\.lr_scheduler.*"
+    )
+
+    torch.set_float32_matmul_precision("high")
+
+    auto_cli(setup)

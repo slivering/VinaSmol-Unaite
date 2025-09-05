@@ -132,5 +132,5 @@ tokenizer_dir: ../tokenization/checkpoints/merged_tokenizer
 # The name of the logger to send metrics to. (type: Literal['wandb', 'tensorboard', 'csv'], default: tensorboard)
 logger_name: tensorboard
 
-# The random seed to use for reproducibility. (type: int, default: 20250830)
+# The random seed to use for reproducibility. (type: int, default: 42)
 seed: 20250830
