@@ -6,13 +6,17 @@ Our approach aims to demonstrate that efficient pretraining methods on an open, 
 
 Future plans include extending these techniques to [Lucie 7B](https://huggingface.co/OpenLLM-France/Lucie-7B-Instruct-v1.1).
 
+> [!NOTE]
+> 
+> For reviewers, a technical report for VinaSmol is available [here](./report.pdf). The report is in draft version as the project is still being worked on.
+
 ## Disclaimer
 
 This model is still in heavy development and is not ready for general use.
 
 ## Development
 
-> [!NOTE] Target audience
+> [!NOTE]
 >
 > This section is aimed at developers who want to replicate VinaSmol or contribute to the project.
 
